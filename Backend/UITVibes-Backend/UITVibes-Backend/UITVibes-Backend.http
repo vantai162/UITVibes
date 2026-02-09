@@ -1,0 +1,6 @@
+@UITVibes_Backend_HostAddress = http://localhost:5038
+
+GET {{UITVibes_Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

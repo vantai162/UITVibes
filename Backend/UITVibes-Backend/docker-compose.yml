@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  api:
+    image: uitvibes-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uitvibes-api
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+      - ASPNETCORE_HTTPS_PORT=8081
+    volumes:
+      - ~/.aspnet/https:/https:ro
+    networks:
+      - uitvibes-network
+
+networks:
+  uitvibes-network:
+    driver: bridge
+

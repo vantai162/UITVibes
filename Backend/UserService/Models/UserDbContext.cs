@@ -22,6 +22,8 @@ public class UserDbContext : DbContext
             entity.Property(e => e.DisplayName).HasMaxLength(100);
             entity.Property(e => e.Bio).HasMaxLength(500);
             entity.Property(e => e.AvatarUrl).HasMaxLength(500);
+            entity.Property(e => e.AvatarPublicId).HasMaxLength(500);
+            entity.Property(e => e.CoverImagePublicId).HasMaxLength(500);
             entity.Property(e => e.CoverImageUrl).HasMaxLength(500);
             entity.Property(e => e.Location).HasMaxLength(100);
             entity.Property(e => e.Website).HasMaxLength(200);

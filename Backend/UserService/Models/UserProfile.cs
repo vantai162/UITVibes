@@ -7,10 +7,14 @@ public class UserProfile
     public string? DisplayName { get; set; }
     public string? Bio { get; set; }
     public string? AvatarUrl { get; set; }
+    public string? AvatarPublicId { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string? CoverImagePublicId { get; set; }
     public DateTime DateOfBirth { get; set; }
     public string? Location { get; set; }
     public string? Website { get; set; }
+    public int FollowersCount { get; set; }
+    public int FollowingCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

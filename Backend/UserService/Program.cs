@@ -38,6 +38,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 // Add services
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();    
 builder.Services.AddHostedService<UserCreatedConsumer>();
 
 builder.Services.AddControllers();

@@ -9,11 +9,16 @@ public class UserProfileService : IUserProfileService
 {
     private readonly UserDbContext _context;
     private readonly ILogger<UserProfileService> _logger;
+    private readonly ICloudinaryService _cloudinaryService;
 
-    public UserProfileService(UserDbContext context, ILogger<UserProfileService> logger)
+    public UserProfileService(
+        UserDbContext context, 
+        ILogger<UserProfileService> logger,
+        ICloudinaryService cloudinaryService)
     {
         _context = context;
         _logger = logger;
+        _cloudinaryService = cloudinaryService;
     }
 
     public async Task<UserProfileDto?> GetProfileByUserIdAsync(Guid userId)
@@ -153,5 +158,101 @@ public class UserProfileService : IUserProfileService
                 DisplayOrder = sl.DisplayOrder
             }).OrderBy(sl => sl.DisplayOrder).ToList()
         };
+    }
+    public async Task<UserProfileDto> UpdateAvatarAsync(Guid userId, string avatarUrl)
+    {
+        var profile = await _context.UserProfiles
+            .Include(p => p.SocialLinks)
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (profile == null)
+        {
+            throw new KeyNotFoundException("Profile not found");
+        }
+
+        // Delete old avatar from Cloudinary if exists
+        if (!string.IsNullOrEmpty(profile.AvatarPublicId))
+        {
+            await _cloudinaryService.DeleteImageAsync(profile.AvatarPublicId);
+        }
+
+        // Extract public ID from Cloudinary URL
+        var publicId = ExtractPublicIdFromUrl(avatarUrl);
+
+        profile.AvatarUrl = avatarUrl;
+        profile.AvatarPublicId = publicId;
+        profile.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Updated avatar for user {UserId}", userId);
+
+        return MapToDto(profile);
+    }
+    public async Task<UserProfileDto> UpdateCoverImageAsync(Guid userId, string coverImageUrl)
+    {
+        var profile = await _context.UserProfiles
+            .Include(p => p.SocialLinks)
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (profile == null)
+        {
+            throw new KeyNotFoundException("Profile not found");
+        }
+
+        // Delete old cover image from Cloudinary if exists
+        if (!string.IsNullOrEmpty(profile.CoverImagePublicId))
+        {
+            await _cloudinaryService.DeleteImageAsync(profile.CoverImagePublicId);
+        }
+
+        // Extract public ID from Cloudinary URL
+        var publicId = ExtractPublicIdFromUrl(coverImageUrl);
+
+        profile.CoverImageUrl = coverImageUrl;
+        profile.CoverImagePublicId = publicId;
+        profile.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Updated cover image for user {UserId}", userId);
+
+        return MapToDto(profile);
+    }
+
+    
+    private static string? ExtractPublicIdFromUrl(string url)
+    {
+        // Extract public ID from Cloudinary URL
+        // Example: https://res.cloudinary.com/demo/image/upload/v1234567890/uitvibes/avatars/abc123.jpg
+        // Public ID: uitvibes/avatars/abc123
+
+        try
+        {
+            var uri = new Uri(url);
+            var segments = uri.AbsolutePath.Split('/');
+
+            // Find "upload" or "image" segment
+            var uploadIndex = Array.FindIndex(segments, s => s == "upload");
+            if (uploadIndex >= 0 && uploadIndex < segments.Length - 2)
+            {
+                // Skip version (v1234567890) if exists
+                var startIndex = segments[uploadIndex + 1].StartsWith('v') ? uploadIndex + 2 : uploadIndex + 1;
+                var publicIdParts = segments[startIndex..];
+
+                // Remove file extension from last part
+                var lastPart = publicIdParts[^1];
+                var lastPartWithoutExt = Path.GetFileNameWithoutExtension(lastPart);
+                publicIdParts[^1] = lastPartWithoutExt;
+
+                return string.Join("/", publicIdParts);
+            }
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        return null;
     }
 }

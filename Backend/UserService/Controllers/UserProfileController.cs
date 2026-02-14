@@ -11,13 +11,16 @@ namespace UserService.Controllers;
 public class UserProfileController : ControllerBase
 {
     private readonly IUserProfileService _userProfileService;
+    private readonly ICloudinaryService _cloudinaryService;
     private readonly ILogger<UserProfileController> _logger;
 
     public UserProfileController(
         IUserProfileService userProfileService,
+        ICloudinaryService cloudinaryService,
         ILogger<UserProfileController> logger)
     {
         _userProfileService = userProfileService;
+        _cloudinaryService = cloudinaryService;
         _logger = logger;
     }
 
@@ -79,6 +82,111 @@ public class UserProfileController : ControllerBase
         {
             _logger.LogError(ex, "Error updating profile for user {UserId}", userId);
             return StatusCode(500, new { message = "An error occurred while updating profile" });
+        }
+    }
+
+    [Authorize]
+    [HttpPost("me/avatar")]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
+    public async Task<ActionResult<UserProfileDto>> UploadAvatar([FromForm] UploadImageRequest request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (request.File == null || request.File.Length == 0)
+        {
+            return BadRequest(new { message = "No file provided" });
+        }
+
+        try
+        {
+            // Upload to Cloudinary
+            var avatarUrl = await _cloudinaryService.UploadImageAsync(request.File, "uitvibes/avatars");
+            
+            // Update profile with new avatar URL
+            var updatedProfile = await _userProfileService.UpdateAvatarAsync(userId, avatarUrl);
+            
+            return Ok(updatedProfile);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
+            return StatusCode(500, new { message = "An error occurred while uploading avatar" });
+        }
+    }
+
+    [HttpPost("{userId}/avatar")]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
+    public async Task<ActionResult<UserProfileDto>> UploadAvatarForUser(Guid userId, [FromForm] UploadImageRequest request)
+    {
+        if (request.File == null || request.File.Length == 0)
+        {
+            return BadRequest(new { message = "No file provided" });
+        }
+        try
+        {
+            // Upload to Cloudinary
+            var avatarUrl = await _cloudinaryService.UploadImageAsync(request.File, "uitvibes/avatars");
+            
+            // Update profile with new avatar URL
+            var updatedProfile = await _userProfileService.UpdateAvatarAsync(userId, avatarUrl);
+            
+            return Ok(updatedProfile);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
+            return StatusCode(500, new { message = "An error occurred while uploading avatar" });
+        }
+    }
+
+    [Authorize]
+    [HttpPost("me/cover")]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
+    public async Task<ActionResult<UserProfileDto>> UploadCoverImage([FromForm] UploadImageRequest request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (request.File == null || request.File.Length == 0)
+        {
+            return BadRequest(new { message = "No file provided" });
+        }
+
+        try
+        {
+            // Upload to Cloudinary with different transformation for cover
+            var coverUrl = await _cloudinaryService.UploadImageAsync(request.File, "uitvibes/covers");
+            
+            // Update profile with new cover image URL
+            var updatedProfile = await _userProfileService.UpdateCoverImageAsync(userId, coverUrl);
+            
+            return Ok(updatedProfile);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading cover image for user {UserId}", userId);
+            return StatusCode(500, new { message = "An error occurred while uploading cover image" });
         }
     }
 }

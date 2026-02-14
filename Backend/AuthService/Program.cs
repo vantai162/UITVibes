@@ -1,3 +1,4 @@
+using AuthService.Messaging;
 using AuthService.Models;
 using AuthService.ServiceLayer.Implementation;
 using AuthService.ServiceLayer.Interface;
@@ -18,6 +19,9 @@ builder.AddNpgsqlDbContext<AuthDbContext>("authdb");
 // Add Redis
 builder.AddRedisClient("cache");
 
+// Add RabbitMQ
+builder.AddRabbitMQClient("messaging");
+
 // Configure JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -37,6 +41,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // Add services
 builder.Services.AddScoped<IAuthService, AuthService.ServiceLayer.Implementation.AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IMessagePublisher, RabbitMQPublisher>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

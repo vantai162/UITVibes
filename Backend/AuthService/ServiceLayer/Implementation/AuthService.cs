@@ -1,4 +1,5 @@
 ﻿using AuthService.DTOs;
+using AuthService.Messaging;
 using AuthService.Models;
 using AuthService.ServiceLayer.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -10,11 +11,18 @@ namespace AuthService.ServiceLayer.Implementation
         private readonly AuthDbContext _context;
         private readonly ITokenService _tokenService;
         private readonly IConfiguration _configuration;
-        public AuthService(AuthDbContext context, ITokenService tokenService, IConfiguration configuration)
+        private readonly IMessagePublisher _messagePublisher;
+
+        public AuthService(
+            AuthDbContext context,
+            ITokenService tokenService,
+            IConfiguration configuration,
+            IMessagePublisher messagePublisher)  // 👈 Add this
         {
             _context = context;
             _tokenService = tokenService;
             _configuration = configuration;
+            _messagePublisher = messagePublisher;  // 👈 Add this
         }
 
 
@@ -61,6 +69,18 @@ namespace AuthService.ServiceLayer.Implementation
 
             _context.RefreshTokens.Add(refreshTokenEntity);
             await _context.SaveChangesAsync();
+
+            // 👇 Publish UserCreated event to RabbitMQ
+            try
+            {
+                await _messagePublisher.PublishUserCreatedAsync(user.Id, user.Email, user.Username);
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail registration
+                // UserService can sync later if needed
+                Console.WriteLine($"Failed to publish UserCreated event: {ex.Message}");
+            }
 
             return new AuthResponse
             {

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using UserService.Models;
@@ -11,9 +12,11 @@ using UserService.Models;
 namespace UserService.Migrations
 {
     [DbContext(typeof(UserDbContext))]
-    partial class UserDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260215052240_AddFollowFeature")]
+    partial class AddFollowFeature
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -142,6 +145,25 @@ namespace UserService.Migrations
                     b.ToTable("UserProfiles");
                 });
 
+            modelBuilder.Entity("UserService.Models.Follow", b =>
+                {
+                    b.HasOne("UserService.Models.UserProfile", "FollowerProfile")
+                        .WithMany("Following")
+                        .HasForeignKey("FollowerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UserService.Models.UserProfile", "FollowingProfile")
+                        .WithMany("Followers")
+                        .HasForeignKey("FollowingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FollowerProfile");
+
+                    b.Navigation("FollowingProfile");
+                });
+
             modelBuilder.Entity("UserService.Models.SocialLink", b =>
                 {
                     b.HasOne("UserService.Models.UserProfile", "UserProfile")
@@ -155,6 +177,10 @@ namespace UserService.Migrations
 
             modelBuilder.Entity("UserService.Models.UserProfile", b =>
                 {
+                    b.Navigation("Followers");
+
+                    b.Navigation("Following");
+
                     b.Navigation("SocialLinks");
                 });
 #pragma warning restore 612, 618

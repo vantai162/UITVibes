@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace UserService.Models;
 
@@ -10,6 +10,7 @@ public class UserDbContext : DbContext
 
     public DbSet<UserProfile> UserProfiles { get; set; }
     public DbSet<SocialLink> SocialLinks { get; set; }
+    public DbSet<Follow> Follows { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,22 @@ public class UserDbContext : DbContext
                 .WithMany(u => u.SocialLinks)
                 .HasForeignKey(e => e.UserProfileId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Follow>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            // Composite index to prevent duplicate follows
+            entity.HasIndex(e => new { e.FollowerId, e.FollowingId }).IsUnique();
+            
+            // Index for queries
+            entity.HasIndex(e => e.FollowerId);
+            entity.HasIndex(e => e.FollowingId);
+
+            // ✅ NO FOREIGN KEY CONSTRAINTS
+            // FollowerId and FollowingId reference UserId from AuthService, not UserProfile.Id
+            // We'll handle referential integrity in application logic
         });
     }
 }

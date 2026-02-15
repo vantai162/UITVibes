@@ -20,4 +20,5 @@ public class UserProfile
 
     // Navigation property
     public ICollection<SocialLink> SocialLinks { get; set; } = new List<SocialLink>();
+
 }

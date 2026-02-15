@@ -189,4 +189,39 @@ public class UserProfileController : ControllerBase
             return StatusCode(500, new { message = "An error occurred while uploading cover image" });
         }
     }
+    [Authorize]
+    [HttpPut("me/bio")]
+    public async Task<ActionResult<UserProfileDto>> UpdateMyBio([FromBody] UpdateBioRequest request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var updatedProfile = await _userProfileService.UpdateBioAsync(userId, request.Bio);
+            return Ok(updatedProfile);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Profile not found" });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating bio for user {UserId}", userId);
+            return StatusCode(500, new { message = "An error occurred while updating bio" });
+        }
+    }
 }

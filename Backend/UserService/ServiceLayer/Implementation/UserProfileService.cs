@@ -255,4 +255,24 @@ public class UserProfileService : IUserProfileService
 
         return null;
     }
+    public async Task<UserProfileDto> UpdateBioAsync(Guid userId, string? bio)
+    {
+        var profile = await _context.UserProfiles
+            .Include(p => p.SocialLinks)
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+        if (profile == null)
+        {
+            throw new KeyNotFoundException("Profile not found");
+        }
+        // Validate bio length
+        if (bio != null && bio.Length > 500)
+        {
+            throw new ArgumentException("Bio cannot exceed 500 characters");
+        }
+        profile.Bio = bio;
+        profile.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Updated bio for user {UserId}", userId);
+        return MapToDto(profile);
+    }
 }

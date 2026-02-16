@@ -23,11 +23,10 @@ public class FollowController : ControllerBase
     [HttpPost("{userId}")]
     public async Task<ActionResult<FollowDto>> FollowUser(Guid userId)
     {
-        var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (currentUserIdClaim == null || !Guid.TryParse(currentUserIdClaim, out var currentUserId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var currentUserId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         try
@@ -55,11 +54,10 @@ public class FollowController : ControllerBase
     [HttpDelete("{userId}")]
     public async Task<IActionResult> UnfollowUser(Guid userId)
     {
-        var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (currentUserIdClaim == null || !Guid.TryParse(currentUserIdClaim, out var currentUserId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var currentUserId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         try
@@ -87,11 +85,10 @@ public class FollowController : ControllerBase
     [HttpGet("{userId}/is-following")]
     public async Task<ActionResult<bool>> IsFollowing(Guid userId)
     {
-        var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (currentUserIdClaim == null || !Guid.TryParse(currentUserIdClaim, out var currentUserId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var currentUserId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         var isFollowing = await _followService.IsFollowingAsync(currentUserId, userId);
@@ -102,12 +99,10 @@ public class FollowController : ControllerBase
     [HttpGet("{userId}/stats")]
     public async Task<ActionResult<UserFollowStatsDto>> GetFollowStats(Guid userId)
     {
-        var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        Guid? currentUserId = null;
-        
-        if (currentUserIdClaim != null && Guid.TryParse(currentUserIdClaim, out var parsedUserId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var currentUserId))
         {
-            currentUserId = parsedUserId;
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         try

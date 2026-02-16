@@ -1,4 +1,4 @@
-var builder = DistributedApplication.CreateBuilder(args);
+﻿var builder = DistributedApplication.CreateBuilder(args);
 
 var cache = builder.AddRedis("cache");
 
@@ -28,10 +28,9 @@ var authService = builder.AddProject<Projects.AuthService>("authservice")
     .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
-    .WithEnvironment("Jwt__Key", jwtKey)  // Inject JWT key
+    .WithEnvironment("Jwt__Key", jwtKey)
     .WithHttpHealthCheck("/health"); 
 
-// User Service - shares JWT key + Cloudinary
 var userService = builder.AddProject<Projects.UserService>("userservice")
     .WithReference(userDb)
     .WaitFor(userDb)
@@ -39,13 +38,12 @@ var userService = builder.AddProject<Projects.UserService>("userservice")
     .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
-    .WithEnvironment("Jwt__Key", jwtKey)  // Same JWT key
     .WithEnvironment("Cloudinary__CloudName", cloudinaryCloudName)
     .WithEnvironment("Cloudinary__ApiKey", cloudinaryApiKey)
     .WithEnvironment("Cloudinary__ApiSecret", cloudinaryApiSecret)
     .WithHttpHealthCheck("/health");
 
-// API Gateway
+// ===== API GATEWAY WITH JWT =====
 var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithReference(cache)
@@ -53,6 +51,7 @@ var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>(
     .WithReference(authService)
     .WaitFor(authService)
     .WithReference(userService)
-    .WaitFor(userService);
+    .WaitFor(userService)
+    .WithEnvironment("Jwt__Key", jwtKey); // ✅ Add JWT Key to Gateway
 
 builder.Build().Run();

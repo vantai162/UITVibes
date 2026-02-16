@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using UserService.DTOs;
@@ -37,19 +37,19 @@ public class UserProfileController : ControllerBase
         return Ok(profile);
     }
 
-    [Authorize]
     [HttpGet("me")]
     public async Task<ActionResult<UserProfileDto>> GetMyProfile()
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        // ✅ Read userId from Gateway's X-User-Id header
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         var profile = await _userProfileService.GetProfileByUserIdAsync(userId);
-        
+
         if (profile == null)
         {
             return NotFound(new { message = "Profile not found" });
@@ -58,15 +58,15 @@ public class UserProfileController : ControllerBase
         return Ok(profile);
     }
 
-    [Authorize]
     [HttpPut("me")]
     public async Task<ActionResult<UserProfileDto>> UpdateMyProfile([FromBody] UpdateProfileRequest request)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        // ✅ Read userId from Gateway's X-User-Id header
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         try
@@ -85,16 +85,15 @@ public class UserProfileController : ControllerBase
         }
     }
 
-    [Authorize]
     [HttpPost("me/avatar")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
     public async Task<ActionResult<UserProfileDto>> UploadAvatar([FromForm] UploadImageRequest request)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         if (request.File == null || request.File.Length == 0)
@@ -152,16 +151,16 @@ public class UserProfileController : ControllerBase
         }
     }
 
-    [Authorize]
+    
     [HttpPost("me/cover")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
     public async Task<ActionResult<UserProfileDto>> UploadCoverImage([FromForm] UploadImageRequest request)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         if (request.File == null || request.File.Length == 0)
@@ -189,15 +188,15 @@ public class UserProfileController : ControllerBase
             return StatusCode(500, new { message = "An error occurred while uploading cover image" });
         }
     }
-    [Authorize]
+  
     [HttpPut("me/bio")]
     public async Task<ActionResult<UserProfileDto>> UpdateMyBio([FromBody] UpdateBioRequest request)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
 
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
         if (!ModelState.IsValid)

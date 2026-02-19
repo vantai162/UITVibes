@@ -9,6 +9,8 @@ var postgres = builder.AddPostgres("postgres")
  
 var authDb = postgres.AddDatabase("authdb");
 var userDb = postgres.AddDatabase("userdb");
+var postDb = postgres.AddDatabase("postdb");
+
 
 // Add RabbitMQ for inter-service messaging
 var messaging = builder.AddRabbitMQ("messaging");
@@ -43,6 +45,19 @@ var userService = builder.AddProject<Projects.UserService>("userservice")
     .WithEnvironment("Cloudinary__ApiSecret", cloudinaryApiSecret)
     .WithHttpHealthCheck("/health");
 
+
+var postService = builder.AddProject<Projects.PostService>("postservice")
+    .WithReference(postDb)
+    .WaitFor(postDb)
+    .WithReference(cache)
+    .WaitFor(cache)
+    .WithReference(messaging)
+    .WaitFor(messaging)
+    .WithEnvironment("Cloudinary__CloudName", cloudinaryCloudName)
+    .WithEnvironment("Cloudinary__ApiKey", cloudinaryApiKey)
+    .WithEnvironment("Cloudinary__ApiSecret", cloudinaryApiSecret)
+    .WithHttpHealthCheck("/health");
+
 // ===== API GATEWAY WITH JWT =====
 var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
@@ -52,6 +67,8 @@ var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>(
     .WaitFor(authService)
     .WithReference(userService)
     .WaitFor(userService)
+    .WithReference(postService)
+    .WaitFor(postService)
     .WithEnvironment("Jwt__Key", jwtKey); // ✅ Add JWT Key to Gateway
 
 builder.Build().Run();

@@ -184,10 +184,12 @@ var app = builder.Build();
 var serviceDiscovery = app.Services.GetRequiredService<IServiceDiscovery>();
 var authServiceUrl = serviceDiscovery.GetAuthServiceUrl();
 var userServiceUrl = serviceDiscovery.GetUserServiceUrl();
+var postServiceUrl = serviceDiscovery.GetPostServiceUrl();
 
 Console.WriteLine("=== Service Discovery Results ===");
 Console.WriteLine($"AuthService: {authServiceUrl}");
 Console.WriteLine($"UserService: {userServiceUrl}");
+Console.WriteLine($"PostService: {postServiceUrl}");
 Console.WriteLine("==================================");
 
 if (app.Environment.IsDevelopment())
@@ -218,6 +220,7 @@ app.MapGet("/", (IServiceDiscovery discovery) => Results.Ok(new
     authentication = "JWT Bearer",
     authServiceUrl = discovery.GetAuthServiceUrl(),
     userServiceUrl = discovery.GetUserServiceUrl(),
+    postServiceUrl = discovery.GetPostServiceUrl(),
     timestamp = DateTime.UtcNow
 }))
 .WithName("GetGatewayInfo")
@@ -231,6 +234,7 @@ app.MapGet("/gateway/test", async (IHttpClientFactory httpClientFactory, IServic
 
     var authUrl = discovery.GetAuthServiceUrl();
     var userUrl = discovery.GetUserServiceUrl();
+    var postUrl = discovery.GetPostServiceUrl();
 
     try
     {
@@ -262,6 +266,21 @@ app.MapGet("/gateway/test", async (IHttpClientFactory httpClientFactory, IServic
         results["userService"] = new { status = "error", message = ex.Message, url = userUrl };
     }
 
+    try
+    {
+        var postResponse = await client.GetAsync($"{postUrl}/health");
+        results["postService"] = new
+        {
+            status = postResponse.IsSuccessStatusCode ? "healthy" : "unhealthy",
+            statusCode = (int)postResponse.StatusCode,
+            url = postUrl
+        };
+    }
+    catch (Exception ex)
+    {
+        results["postService"] = new { status = "error", message = ex.Message, url = postUrl };
+    }
+
     return Results.Ok(new
     {
         gateway = "healthy",
@@ -270,7 +289,6 @@ app.MapGet("/gateway/test", async (IHttpClientFactory httpClientFactory, IServic
     });
 })
 .WithName("TestDownstreamServices")
-//.WithOpenApi()
 .AllowAnonymous();
 
 app.MapGet("/gateway/routes", (IServiceDiscovery discovery) =>
@@ -313,6 +331,20 @@ app.MapGet("/gateway/routes", (IServiceDiscovery discovery) =>
                 new { gateway = "/user/follow/{userId}/followers", proxiedTo = "/api/follow/{userId}/followers", auth = "Public" },
                 new { gateway = "/user/follow/{userId}/following", proxiedTo = "/api/follow/{userId}/following", auth = "Public" }
             }
+        },
+
+        new
+        {
+            service = "PostService",
+            baseUrl = discovery.GetPostServiceUrl(),
+            routes = new[]
+            {
+                new { gateway = "/post", proxiedTo = "/api/post", auth = "Required (POST)" },
+                new { gateway = "/post/{id}", proxiedTo = "/api/post/{id}", auth = "Public (GET), Required (PUT/DELETE)" },
+                new { gateway = "/post/user/{userId}", proxiedTo = "/api/post/user/{userId}", auth = "Public" },
+                new { gateway = "/post/feed", proxiedTo = "/api/post/feed", auth = "Required" },
+                new { gateway = "/post/media", proxiedTo = "/api/post/media", auth = "Required" }
+            }
         }
     };
 
@@ -324,7 +356,6 @@ app.MapGet("/gateway/routes", (IServiceDiscovery discovery) =>
     });
 })
 .WithName("GetRoutes")
-//.WithOpenApi()
 .AllowAnonymous();
 
 // ===== PROTECTED ENDPOINT EXAMPLE =====
@@ -373,8 +404,8 @@ app.MapReverseProxy(proxyPipeline =>
         var isPublicGetRequest =
             method == "GET" &&
             (path.Contains("/user/userprofile/") && !path.Contains("/me")) ||
-            (path.Contains("/user/follow/") && (path.Contains("/stats") || path.Contains("/followers") || path.Contains("/following")));
-
+            (path.Contains("/user/follow/") && (path.Contains("/stats") || path.Contains("/followers") || path.Contains("/following"))) ||
+            (path.Contains("/post/") && !path.Contains("/feed"));
         // Require authentication for non-public paths
         if (!isPublicPath && !isPublicGetRequest)
         {

@@ -25,4 +25,10 @@ public class ServiceDiscovery : IServiceDiscovery
             ?? _configuration["services:userservice:http:0"]
             ?? "https://localhost:7234";
     }
+    public string GetPostServiceUrl()
+    {
+        return _configuration["services:postservice:https:0"]
+            ?? _configuration["services:postservice:http:0"]
+            ?? "https://localhost:7146"; // Default port
+    }
 }

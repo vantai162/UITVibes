@@ -5,5 +5,6 @@ public interface IServiceDiscovery
 {
         string GetAuthServiceUrl();
         string GetUserServiceUrl();
+        string GetPostServiceUrl();
 }
 

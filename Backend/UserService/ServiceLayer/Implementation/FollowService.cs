@@ -24,7 +24,15 @@ public class FollowService : IFollowService
             throw new InvalidOperationException("Cannot follow yourself");
         }
 
-        var followerProfile = await _context.UserProfiles
+        var blocked = await _context.Blocks
+            .AnyAsync(b => (b.BlockerId == followerId && b.BlockedId == followingId) ||
+                           (b.BlockerId == followingId && b.BlockedId == followerId));
+        if (blocked)
+        {
+            throw new InvalidOperationException("Cannot follow user due to block relationship");
+        }
+
+            var followerProfile = await _context.UserProfiles
            .FirstOrDefaultAsync(p => p.UserId == followerId);
         var followingProfile = await _context.UserProfiles
             .FirstOrDefaultAsync(p => p.UserId == followingId);

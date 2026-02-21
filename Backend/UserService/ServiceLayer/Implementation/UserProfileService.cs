@@ -10,26 +10,39 @@ public class UserProfileService : IUserProfileService
     private readonly UserDbContext _context;
     private readonly ILogger<UserProfileService> _logger;
     private readonly ICloudinaryService _cloudinaryService;
+    private readonly IBlockService _blockService;
 
     public UserProfileService(
         UserDbContext context, 
         ILogger<UserProfileService> logger,
-        ICloudinaryService cloudinaryService)
+        ICloudinaryService cloudinaryService,
+        IBlockService blockService)
     {
         _context = context;
         _logger = logger;
         _cloudinaryService = cloudinaryService;
+        _blockService = blockService;
     }
 
-    public async Task<UserProfileDto?> GetProfileByUserIdAsync(Guid userId)
+    public async Task<UserProfileDto?> GetProfileByUserIdAsync(Guid currentUserId,Guid userId)
     {
+        var blocked = await _blockService.IsBlockedAsync(currentUserId, userId);
+        if (blocked)
+        {
+            throw new UnauthorizedAccessException("You cannot view this profile");
+        }
+        var blocking = await _blockService.IsBlockedAsync(userId, currentUserId);
+        if (blocking)
+        {
+            throw new UnauthorizedAccessException("You cannot view this profile");
+        }
         var profile = await _context.UserProfiles
             .Include(p => p.SocialLinks)
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (profile == null)
         {
-            return null;
+            throw new KeyNotFoundException("User profile not found");
         }
 
         return MapToDto(profile);

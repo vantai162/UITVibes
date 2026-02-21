@@ -27,7 +27,12 @@ public class UserProfileController : ControllerBase
     [HttpGet("{userId}")]
     public async Task<ActionResult<UserProfileDto>> GetProfile(Guid userId)
     {
-        var profile = await _userProfileService.GetProfileByUserIdAsync(userId);
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var currentUserId))
+        {
+            return Unauthorized(new { message = "User ID not found in request headers" });
+        }
+        var profile = await _userProfileService.GetProfileByUserIdAsync(currentUserId,userId);
         
         if (profile == null)
         {
@@ -48,7 +53,7 @@ public class UserProfileController : ControllerBase
             return Unauthorized(new { message = "User ID not found in request headers" });
         }
 
-        var profile = await _userProfileService.GetProfileByUserIdAsync(userId);
+        var profile = await _userProfileService.GetProfileByUserIdAsync(userId,userId);
 
         if (profile == null)
         {

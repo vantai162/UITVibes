@@ -12,6 +12,8 @@ public class UserDbContext : DbContext
     public DbSet<SocialLink> SocialLinks { get; set; }
     public DbSet<Follow> Follows { get; set; }
 
+    public DbSet<Block> Blocks { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -56,6 +58,17 @@ public class UserDbContext : DbContext
             // ✅ NO FOREIGN KEY CONSTRAINTS
             // FollowerId and FollowingId reference UserId from AuthService, not UserProfile.Id
             // We'll handle referential integrity in application logic
+        });
+
+        modelBuilder.Entity<Block>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            // Composite index to prevent duplicate blocks
+            entity.HasIndex(e => new { e.BlockerId, e.BlockedId }).IsUnique();
+            // Index for queries
+            entity.HasIndex(e => e.BlockerId);
+            entity.HasIndex(e => e.BlockedId);
+
         });
     }
 }

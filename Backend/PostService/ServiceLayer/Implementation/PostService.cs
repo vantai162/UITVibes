@@ -307,6 +307,7 @@ public class PostService : IPostService
         await Task.CompletedTask;
     }
 
+
     private async Task<PostDto> MapToDto(Post post, Guid? currentUserId)
     {
         var dto = new PostDto

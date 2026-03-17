@@ -1,4 +1,4 @@
-📱 UITVibes Microservices
+📱 UITVibes Microservices (đang phát triển)
 UITVibes là một nền tảng mạng xã hội được xây dựng trên kiến trúc Microservices hiện đại, sử dụng .NET 8 và .NET Aspire để tối ưu hóa việc phát triển và triển khai.
 
 🏗️ Kiến trúc hệ thống (Architecture)
@@ -8,6 +8,11 @@ Dự án được chia thành các dịch vụ riêng biệt nhằm đảm bảo
 
 - UserService: Quản lý thông tin hồ sơ người dùng, tích hợp Cloudinary để xử lý hình ảnh.
 
+- MessageService: Quản lý tin nhắn giữa các người dùng.
+
+- NotificationService: Quản lý phần thông báo.
+
+  
 - ApiService: Đóng vai trò là API Gateway, điều phối và định tuyến các yêu cầu đến các service tương ứng.
 
 Infrastructure: Sử dụng các công nghệ mạnh mẽ:

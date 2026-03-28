@@ -72,29 +72,15 @@ export async function login(email: string, password: string): Promise<User> {
     setCurrentUser(user);
     if (user.username) void writeLocalHandle(user.id, user.username);
     return user;
-  } catch {
-    await delay(800);
-    const normalized = email.trim().toLowerCase();
-    if (normalized === "new@uitvibes.com") {
-      setCurrentAccount("newUser");
-      setCurrentUserId("current");
-      setCurrentUser(mockNewUser);
-      return mockNewUser;
-    }
-    setCurrentAccount("activeUser");
-    setCurrentUserId("current");
-    setCurrentUser({} as User);
-    return {
-      id: "current",
-      username: "anhvu",
-      displayName: "Anh Vu",
-      avatar: "https://i.pravatar.cc/150?img=33",
-      bio: "Software engineer \\ud83d\\udcbb",
-      followers: 1240,
-      following: 380,
-      posts: 45,
-      isVerified: false,
-    };
+  } catch (error: any) {
+    // Surface backend error message to callers while logging full error
+    console.error("[Auth] Login failed", error?.response?.data ?? error);
+    const message =
+      (error?.response?.data &&
+        (error.response.data.message || error.response.data.error)) ||
+      error?.message ||
+      "Login failed";
+    throw new Error(message);
   }
 }
 
@@ -128,23 +114,14 @@ export async function register(
     setCurrentUser(user);
     if (user.username) void writeLocalHandle(user.id, user.username);
     return user;
-  } catch {
-    await delay(800);
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      username,
-      displayName: username,
-      avatar: "https://i.pravatar.cc/150?img=47",
-      bio: "",
-      followers: 0,
-      following: 0,
-      posts: 0,
-      isVerified: false,
-    };
-    setCurrentUserId(newUser.id);
-    setCurrentUser(newUser);
-    if (newUser.username) void writeLocalHandle(newUser.id, newUser.username);
-    return newUser;
+  } catch (error: any) {
+    console.error("[Auth] Registration failed", error?.response?.data ?? error);
+    const message =
+      (error?.response?.data &&
+        (error.response.data.message || error.response.data.error)) ||
+      error?.message ||
+      "Registration failed";
+    throw new Error(message);
   }
 }
 

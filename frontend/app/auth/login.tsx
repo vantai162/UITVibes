@@ -15,7 +15,6 @@ import { FormInput } from "../../components/FormInput";
 import { Button } from "../../components/Button";
 import { useApp } from "../../context/AppContext";
 import { AppColors, borderRadius } from "../../constants/theme";
-import { DEMO_ACCOUNTS } from "../../services/api";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -168,66 +167,6 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Demo accounts */}
-          <View style={styles.demoSection}>
-            <Text style={styles.demoSectionTitle}>Try a demo account</Text>
-            <TouchableOpacity
-              style={styles.demoBtn}
-              activeOpacity={0.7}
-              onPress={() => {
-                setEmail(DEMO_ACCOUNTS.newUser.email);
-                setPassword(DEMO_ACCOUNTS.newUser.password);
-                setEmailError("");
-                setPasswordError("");
-              }}
-            >
-              <View style={[styles.demoAvatar, { backgroundColor: "#E8F4FD" }]}>
-                <Text style={styles.demoAvatarText}>🆕</Text>
-              </View>
-              <View style={styles.demoInfo}>
-                <Text style={styles.demoName}>
-                  {DEMO_ACCOUNTS.newUser.label}
-                </Text>
-                <Text style={styles.demoDesc}>
-                  {DEMO_ACCOUNTS.newUser.description}
-                </Text>
-              </View>
-              <Feather
-                name="chevron-right"
-                size={18}
-                color={AppColors.iconMuted}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.demoBtn}
-              activeOpacity={0.7}
-              onPress={() => {
-                setEmail(DEMO_ACCOUNTS.activeUser.email);
-                setPassword(DEMO_ACCOUNTS.activeUser.password);
-                setEmailError("");
-                setPasswordError("");
-              }}
-            >
-              <View style={[styles.demoAvatar, { backgroundColor: "#E8F8EE" }]}>
-                <Text style={styles.demoAvatarText}>🔥</Text>
-              </View>
-              <View style={styles.demoInfo}>
-                <Text style={styles.demoName}>
-                  {DEMO_ACCOUNTS.activeUser.label}
-                </Text>
-                <Text style={styles.demoDesc}>
-                  {DEMO_ACCOUNTS.activeUser.description}
-                </Text>
-              </View>
-              <Feather
-                name="chevron-right"
-                size={18}
-                color={AppColors.iconMuted}
-              />
-            </TouchableOpacity>
-          </View>
-
           {/* Social logins */}
           <View style={styles.socialSection}>
             <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
@@ -342,52 +281,6 @@ const styles = StyleSheet.create({
   },
   socialSection: {
     gap: 12,
-  },
-  demoSection: {
-    marginBottom: 24,
-  },
-  demoSectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: AppColors.iconMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 10,
-    paddingHorizontal: 2,
-  },
-  demoBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: AppColors.surface,
-    borderWidth: 1.5,
-    borderColor: AppColors.border,
-    borderRadius: borderRadius.md,
-    padding: 12,
-    marginBottom: 10,
-  },
-  demoAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  demoAvatarText: {
-    fontSize: 20,
-  },
-  demoInfo: {
-    flex: 1,
-  },
-  demoName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: AppColors.text,
-    marginBottom: 2,
-  },
-  demoDesc: {
-    fontSize: 12,
-    color: AppColors.textMuted,
   },
   authError: {
     marginTop: 8,

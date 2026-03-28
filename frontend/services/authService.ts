@@ -1,4 +1,4 @@
-import { User, mockNewUser } from "../data/mockData";
+import { User } from "../data/mockData";
 import apiClient, {
   saveTokens,
   getAccessToken,
@@ -22,28 +22,14 @@ import {
   BE_UserProfile,
 } from "./backendTypes";
 
-export const DEMO_ACCOUNTS = {
-  newUser: {
-    email: "new@uitvibes.com",
-    password: "demo1234",
-    label: "New Account",
-    description: "Fresh start — no posts, no friends",
-    user: mockNewUser,
-  },
-  activeUser: {
-    email: "active@uitvibes.com",
-    password: "demo1234",
-    label: "Active Account",
-    description: "Full data — posts, stories, friends",
-    user: {} as User,
-  },
-};
-
 export async function login(email: string, password: string): Promise<User> {
   const body: BE_LoginRequest = { email, password };
 
   try {
-    const { data } = await apiClient.post<BE_AuthResponse>("/auth/login", body);
+    const { data } = await apiClient.post<BE_AuthResponse>(
+      "/auth/auth/login",
+      body,
+    );
     await saveTokens(data.accessToken, data.refreshToken);
 
     const [profileRes, statsRes] = await Promise.allSettled([
@@ -93,7 +79,7 @@ export async function register(
 
   try {
     const { data } = await apiClient.post<BE_AuthResponse>(
-      "/auth/register",
+      "/auth/auth/register",
       body,
     );
     await saveTokens(data.accessToken, data.refreshToken);
@@ -129,7 +115,7 @@ export async function logout(): Promise<void> {
   try {
     const refreshToken = await getRefreshTokenFromStorage();
     if (refreshToken) {
-      await apiClient.post("/auth/revoke", { refreshToken });
+      await apiClient.post("/auth/auth/revoke", { refreshToken });
     }
   } catch {
     // ignore revoke errors

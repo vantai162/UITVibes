@@ -24,20 +24,22 @@ var cloudinaryApiSecret = builder.AddParameter("cloudinary-apisecret", secret: t
 
 // Auth Service - shares JWT key
 var authService = builder.AddProject<Projects.AuthService>("authservice")
+    .WithExternalHttpEndpoints()
     .WithReference(authDb)
     .WaitFor(authDb)
- //   .WithReference(cache)
-  //  .WaitFor(cache)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
     .WithEnvironment("Jwt__Key", jwtKey)
-    .WithHttpHealthCheck("/health"); 
+    .WithHttpHealthCheck("/health");
 
 var userService = builder.AddProject<Projects.UserService>("userservice")
+    .WithExternalHttpEndpoints()
     .WithReference(userDb)
     .WaitFor(userDb)
- //   .WithReference(cache)
-   // .WaitFor(cache)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
     .WithEnvironment("Cloudinary__CloudName", cloudinaryCloudName)
@@ -47,10 +49,11 @@ var userService = builder.AddProject<Projects.UserService>("userservice")
 
 
 var postService = builder.AddProject<Projects.PostService>("postservice")
+    .WithExternalHttpEndpoints()
     .WithReference(postDb)
     .WaitFor(postDb)
-  //  .WithReference(cache)
-  //  .WaitFor(cache)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
     .WithEnvironment("Cloudinary__CloudName", cloudinaryCloudName)
@@ -61,28 +64,30 @@ var postService = builder.AddProject<Projects.PostService>("postservice")
 
 
 var messageService = builder.AddProject<Projects.MessageService>("messageservice")
+    .WithExternalHttpEndpoints()
     .WithReference(messageDb)
     .WaitFor(messageDb)
- //   .WithReference(cache)
-   // .WaitFor(cache)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithReference(messaging)
     .WaitFor(messaging)
     .WithHttpHealthCheck("/health");
 
 // ===== API GATEWAY WITH JWT =====
 var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>("apiservice")
+    .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
-  //  .WithReference(cache)
-    //.WaitFor(cache)
+    .WithReference(cache)
+    .WaitFor(cache)
     .WithReference(authService)
     .WaitFor(authService)
     .WithReference(userService)
     .WaitFor(userService)
     .WithReference(postService)
     .WaitFor(postService)
-    .WithReference(messageService) 
+    .WithReference(messageService)
     .WaitFor(messageService)
-    .WithEnvironment("Jwt__Key", jwtKey); // ✅ Add JWT Key to Gateway
+    .WithEnvironment("Jwt__Key", jwtKey);
 
 
 

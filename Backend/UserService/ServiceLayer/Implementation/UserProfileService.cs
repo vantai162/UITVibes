@@ -354,4 +354,29 @@ public class UserProfileService : IUserProfileService
                 $"{fieldName} must be a permanent https URL or uploaded via the avatar/cover endpoints, not a browser-local blob/data/file URL.");
         }
     }
+    public async Task<List<SearchUserProfileDto>> SearchUserProfileAsync(string search)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var results = await _context.UserProfiles
+                 .Where(p =>
+                     EF.Functions.ILike(p.DisplayName!, $"%{search}%") ||
+                     (p.Bio != null && EF.Functions.ILike(p.Bio!, $"%{search}%")))
+                 .Select(p => new SearchUserProfileDto
+                 {
+                     UserId = p.UserId,
+                     DisplayName = p.DisplayName,
+                     Bio = p.Bio,
+                     AvatarUrl = p.AvatarUrl,
+                     AvatarPublicId = p.AvatarPublicId,
+                     FollowersCount = p.FollowersCount
+                 })
+                 .ToListAsync();
+            return results;
+        }
+        else
+        {
+            throw new ArgumentException("Search query cannot be empty");
+        }
+    }
 }

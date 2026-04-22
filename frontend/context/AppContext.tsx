@@ -9,12 +9,12 @@ import React, {
 import {
   User,
   Post,
-  Story,
   Conversation,
   Message,
   Notification,
 } from '../data/mockData';
 import * as api from '../services/api';
+import type { Story } from '../services/storyService';
 
 interface AppContextType {
   // Auth / User

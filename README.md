@@ -36,7 +36,8 @@ UITVibes là một nền tảng mạng xã hội được xây dựng trên ki�
 ## 🛠️ Tech Stack
 
 ## Sơ đồ:
-<img width="968" height="522" alt="Image" src="https://github.com/user-attachments/assets/330b15fc-b101-4f6c-857c-6879662f674e" />
+<img width="968" height="522" alt="download" src="https://github.com/user-attachments/assets/959277fa-078f-4e84-9f5d-8c31eb8a00e7" />
+
 
 ### Frontend
 

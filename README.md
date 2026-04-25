@@ -3,33 +3,6 @@ UITVibes là một nền tảng mạng xã hội được xây dựng trên ki�
 
 ---
 
-## 🛠️ Tech Stack
-
-### Frontend
-
-* ReactNative
-* JavaScript (ES6+)
-
-### Backend
-
-* .NET 8.0 & ASP.NET Core API
-* .NET Aspire
-
-### Database
-
-* PostgreSQL
-
-### DevOps & Infrastructure
-
-* Docker
-* Redis (Caching, Session, Queue)
-* RabbitMQ (Được sử dụng để giải quyết vấn đề giao tiếp bất đồng bộ giữa các dịch vụ)
-* SignalR 
-* Cloudinary 
-* MailtKit
-* YARP (Yet Another Reverse Proxy)
----
-
 ## ✨ Features
 
 ### Người dùng & xác thực
@@ -57,6 +30,37 @@ UITVibes là một nền tảng mạng xã hội được xây dựng trên ki�
 * Redis caching để tối ưu hiệu năng truy xuất.
 * RabbitMQ cho giao tiếp bất đồng bộ giữa các service.
 * Tích hợp Cloudinary để lưu trữ và xử lý hình ảnh.
+
+---
+
+## 🛠️ Tech Stack
+
+## Sơ đồ:
+<img width="968" height="522" alt="Image" src="https://github.com/user-attachments/assets/330b15fc-b101-4f6c-857c-6879662f674e" />
+
+### Frontend
+
+* ReactNative
+* JavaScript (ES6+)
+
+### Backend
+
+* .NET 8.0 & ASP.NET Core API
+* .NET Aspire
+
+### Database
+
+* PostgreSQL
+
+### DevOps & Infrastructure
+
+* Docker
+* Redis (Caching, Session, Queue)
+* RabbitMQ (Được sử dụng để giải quyết vấn đề giao tiếp bất đồng bộ giữa các dịch vụ)
+* SignalR 
+* Cloudinary 
+* MailtKit
+* YARP (Yet Another Reverse Proxy)
 
 ---
 

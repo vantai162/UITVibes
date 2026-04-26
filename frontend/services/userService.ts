@@ -157,16 +157,15 @@ export async function searchUsers(query: string): Promise<User[]> {
 
   try {
     const url = `/user/userprofile/search?query=${encodeURIComponent(query)}`;
-    console.log("[searchUsers] GET", url);
     const response = await apiClient.get<BE_SearchUserProfileDto[]>(url);
     const data = response.data;
-    console.log("[searchUsers] raw data:", JSON.stringify(data));
-    console.log("[searchUsers] data length:", data.length);
-    if (data.length > 0) {
-      console.log("[searchUsers] first item keys:", Object.keys(data[0]));
-      console.log("[searchUsers] first item values:", JSON.stringify(data[0]));
-    }
-    return data.map((p) => ({
+
+    // Check isFollowing for each user in parallel
+    const isFollowingResults = await Promise.all(
+      data.map((p) => checkIsFollowing(p.userId))
+    );
+
+    const results = data.map((p, i) => ({
       id: p.userId,
       username: "",
       displayName: p.displayName,
@@ -177,11 +176,10 @@ export async function searchUsers(query: string): Promise<User[]> {
       following: 0,
       posts: 0,
       isVerified: false,
+      isFollowing: isFollowingResults[i] ?? activeUserFollowingIds.has(p.userId),
     }));
+    return results;
   } catch (err) {
-    console.error("[searchUsers] API error:", err);
-    console.error("[searchUsers] error response:", (err as any)?.response?.data);
-    console.error("[searchUsers] error status:", (err as any)?.response?.status);
     await delay(300);
     const lowerQuery = query.toLowerCase();
     return mockUsers.filter(
@@ -218,10 +216,13 @@ export async function fetchUserById(id: string): Promise<User> {
     const { data } = await apiClient.get<BE_UserProfile>(
       `/user/userprofile/${id}`,
     );
+    const currentUid = getCurrentUserId();
     const statsRes = await apiClient.get<BE_FollowStats>(
       `/user/follow/${id}/stats`,
+      currentUid ? { params: { currentUserId: currentUid } } : undefined,
     );
     const user = transformBEUserProfile(data, statsRes.data);
+    user.isFollowing = statsRes.data.isFollowing ?? false;
     cacheUser(user);
     return user;
   } catch {
@@ -242,22 +243,26 @@ export async function fetchUserById(id: string): Promise<User> {
 
 export async function getUserById(id: string): Promise<User | undefined> {
   try {
-    if (id === getCurrentUserId() || id === "current") {
+    const currentUid = getCurrentUserId();
+    let userProfile: BE_UserProfile;
+    if (id === "current" || id === currentUid) {
       const { data } = await apiClient.get<BE_UserProfile>(
         "/user/userprofile/me",
       );
-      const statsRes = await apiClient.get<BE_FollowStats>(
-        `/user/follow/${data.userId}/stats`,
+      userProfile = data;
+    } else {
+      const { data } = await apiClient.get<BE_UserProfile>(
+        `/user/userprofile/${id}`,
       );
-      return transformBEUserProfile(data, statsRes.data);
+      userProfile = data;
     }
-    const { data } = await apiClient.get<BE_UserProfile>(
-      `/user/userprofile/${id}`,
-    );
     const statsRes = await apiClient.get<BE_FollowStats>(
-      `/user/follow/${id}/stats`,
+      `/user/follow/${userProfile.userId}/stats`,
+      currentUid ? { params: { currentUserId: currentUid } } : undefined,
     );
-    return transformBEUserProfile(data, statsRes.data);
+    const user = transformBEUserProfile(userProfile, statsRes.data);
+    user.isFollowing = statsRes.data.isFollowing ?? false;
+    return user;
   } catch {
     await delay(200);
     if (id === "current") {
@@ -356,6 +361,7 @@ export async function followUser(userId: string): Promise<boolean> {
       user.isFollowing = true;
       user.followers += 1;
     }
+    clearUserCache();
     return true;
   } catch {
     await delay(300);
@@ -366,6 +372,7 @@ export async function followUser(userId: string): Promise<boolean> {
         user.isFollowing = true;
         user.followers += 1;
       }
+      clearUserCache();
       return true;
     }
     return false;
@@ -381,6 +388,7 @@ export async function unfollowUser(userId: string): Promise<boolean> {
       user.isFollowing = false;
       user.followers = Math.max(0, user.followers - 1);
     }
+    clearUserCache();
     return true;
   } catch {
     await delay(300);
@@ -391,6 +399,7 @@ export async function unfollowUser(userId: string): Promise<boolean> {
         user.isFollowing = false;
         user.followers = Math.max(0, user.followers - 1);
       }
+      clearUserCache();
       return true;
     }
     return false;
@@ -417,6 +426,7 @@ export async function toggleFollow(userId: string): Promise<boolean> {
         user.followers += 1;
       }
     }
+    clearUserCache();
     return !isCurrentlyFollowing;
   } catch {
     await delay(200);
@@ -427,11 +437,13 @@ export async function toggleFollow(userId: string): Promise<boolean> {
       activeUserFollowingIds.delete(userId);
       user.isFollowing = false;
       user.followers = Math.max(0, user.followers - 1);
+      clearUserCache();
       return false;
     } else {
       activeUserFollowingIds.add(userId);
       user.isFollowing = true;
       user.followers += 1;
+      clearUserCache();
       return true;
     }
   }
@@ -439,6 +451,24 @@ export async function toggleFollow(userId: string): Promise<boolean> {
 
 export function isFollowing(userId: string): boolean {
   return activeUserFollowingIds.has(userId);
+}
+
+/**
+ * Check if current user is following a specific user via backend API.
+ * Returns true/false, or null if the request fails (e.g., not logged in).
+ */
+export async function checkIsFollowing(userId: string): Promise<boolean | null> {
+  const currentUid = getCurrentUserId();
+  if (!currentUid || currentUid === "current") return null;
+  try {
+    const { data } = await apiClient.get<{ isFollowing: boolean }>(
+      `/user/follow/${userId}/is-following`,
+      { params: { currentUserId: currentUid } },
+    );
+    return data.isFollowing;
+  } catch {
+    return null;
+  }
 }
 
 export async function getFollowers(userId: string): Promise<User[]> {

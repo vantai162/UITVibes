@@ -188,7 +188,7 @@ export default function SearchScreen() {
                 <View style={styles.emptyContainer}>
                   <Feather name="users" size={48} color={AppColors.border} strokeWidth={1.5} />
                   <Text style={styles.emptyTitle}>
-                    {searchQuery.length > 0 ? `No users found for "@{searchQuery}"` : 'Search for people'}
+                    {searchQuery.length > 0 ? `No users found for "@${searchQuery}"` : 'Search for people'}
                   </Text>
                   <Text style={styles.emptySubtitle}>
                     {searchQuery.length > 0

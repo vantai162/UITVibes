@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { getUserById, getUserPosts, getUserStories, toggleFollow, type Story } from '../../services/api';
+import { getCurrentUserId } from '../../services/session';
 import { User, Post } from '../../data/mockData';
 import { Avatar, PostGrid, StoryGrid } from '../../components';
 import { AppColors, layoutPadding } from '../../constants/theme';
@@ -139,17 +140,21 @@ export default function UserProfileScreen() {
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.followButton, user.isFollowing && styles.followingButton]}
-              onPress={handleFollowToggle}
-            >
-              <Text style={[styles.followButtonText, user.isFollowing && styles.followingButtonText]}>
-                {user.isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.messageButton} onPress={handleMessage}>
-              <Text style={styles.messageButtonText}>Message</Text>
-            </TouchableOpacity>
+            {user.id !== getCurrentUserId() && (
+              <>
+                <TouchableOpacity
+                  style={[styles.followButton, user.isFollowing && styles.followingButton]}
+                  onPress={handleFollowToggle}
+                >
+                  <Text style={[styles.followButtonText, user.isFollowing && styles.followingButtonText]}>
+                    {user.isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.messageButton} onPress={handleMessage}>
+                  <Text style={styles.messageButtonText}>Message</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.storyStripScroll}>

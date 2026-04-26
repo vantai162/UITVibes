@@ -1,4 +1,4 @@
-﻿using CloudinaryDotNet;
+using CloudinaryDotNet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
@@ -99,7 +99,27 @@ public class UserProfileService : IUserProfileService
 
         // Update basic fields
         if (request.DisplayName != null)
-            profile.DisplayName = request.DisplayName;
+        {
+            var trimmedDisplayName = request.DisplayName.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedDisplayName))
+            {
+                throw new ArgumentException("Display name cannot be empty");
+            }
+            if (trimmedDisplayName.Length > 100)
+            {
+                throw new ArgumentException("Display name cannot exceed 100 characters");
+            }
+            // Check for duplicate display name (case-insensitive)
+            var displayNameExists = await _context.UserProfiles
+                .AnyAsync(p => p.DisplayName != null &&
+                               EF.Functions.ILike(p.DisplayName, trimmedDisplayName) &&
+                               p.UserId != userId);
+            if (displayNameExists)
+            {
+                throw new InvalidOperationException("Display name is already taken");
+            }
+            profile.DisplayName = trimmedDisplayName;
+        }
 
         if (request.Bio != null)
             profile.Bio = request.Bio;
@@ -470,37 +490,56 @@ public class UserProfileService : IUserProfileService
     }
 
     public async Task<SetDisplayNameDto> UpdateDisplayNameAsync(Guid currentUserId, string displayName)
+{
+    var profile = await _context.UserProfiles
+        .Include(p => p.SocialLinks)
+        .FirstOrDefaultAsync(p => p.UserId == currentUserId);
+
+    if (profile == null)
     {
-        var profile = await _context.UserProfiles
-            .Include(p => p.SocialLinks)
-            .FirstOrDefaultAsync(p => p.UserId == currentUserId);
-
-        if (profile == null)
-        {
-            throw new KeyNotFoundException("Profile not found");
-        }
-
-        var trimmedDisplayName = displayName?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedDisplayName))
-        {
-            throw new ArgumentException("Display name cannot be empty");
-        }
-
-        if (trimmedDisplayName.Length > 100)
-        {
-            throw new ArgumentException("Display name cannot exceed 100 characters");
-        }
-
-        profile.DisplayName = trimmedDisplayName;
-        profile.UpdatedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("Updated display name for user {UserId}", currentUserId);
-
-        return new SetDisplayNameDto
-        {
-            DisplayName = profile.DisplayName!
-        };
+        throw new KeyNotFoundException("Profile not found");
     }
+
+    var exist = await _context.UserProfiles.AnyAsync(p => p.DisplayName == displayName && p.UserId != currentUserId);
+    if (exist)
+    {
+        throw new ArgumentException("Display name is already taken");
+    }
+
+    var trimmedDisplayName = displayName?.Trim();
+    if (string.IsNullOrWhiteSpace(trimmedDisplayName))
+    {
+        throw new ArgumentException("Display name cannot be empty");
+    }
+
+    if (trimmedDisplayName.Length > 100)
+    {
+        throw new ArgumentException("Display name cannot exceed 100 characters");
+    }
+
+    profile.DisplayName = trimmedDisplayName;
+    profile.UpdatedAt = DateTime.UtcNow;
+
+    await _context.SaveChangesAsync();
+
+    _logger.LogInformation("Updated display name for user {UserId}", currentUserId);
+
+    return new SetDisplayNameDto
+    {
+        DisplayName = profile.DisplayName!
+    };
+}
+
+public async Task<bool> IsDisplayNameAvailableAsync(string displayName)
+{
+    var trimmed = displayName?.Trim();
+    if (string.IsNullOrWhiteSpace(trimmed))
+    {
+        return false;
+    }
+
+    return !await _context.UserProfiles
+        .AnyAsync(p => p.DisplayName != null &&
+                       EF.Functions.ILike(p.DisplayName, trimmed));
+}
 }

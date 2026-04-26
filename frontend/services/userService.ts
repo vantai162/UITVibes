@@ -22,6 +22,8 @@ import {
   BE_PostResponse,
   BE_UpdateProfileRequest,
   BE_UpdateBioRequest,
+  BE_SearchUserProfileDto,
+  BE_FollowerListDto,
   normalizeAvatarUrlFromProfile,
   normalizeCoverUrlFromProfile,
 } from "./backendTypes";
@@ -149,23 +151,37 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function searchUsers(query: string): Promise<User[]> {
+  if (!query.trim()) {
+    return [];
+  }
+
   try {
-    const { data } = await apiClient.get<BE_UserProfile[]>("/user/search", {
-      params: { q: query, limit: 20 },
-    });
+    const url = `/user/userprofile/search?query=${encodeURIComponent(query)}`;
+    console.log("[searchUsers] GET", url);
+    const response = await apiClient.get<BE_SearchUserProfileDto[]>(url);
+    const data = response.data;
+    console.log("[searchUsers] raw data:", JSON.stringify(data));
+    console.log("[searchUsers] data length:", data.length);
+    if (data.length > 0) {
+      console.log("[searchUsers] first item keys:", Object.keys(data[0]));
+      console.log("[searchUsers] first item values:", JSON.stringify(data[0]));
+    }
     return data.map((p) => ({
       id: p.userId,
       username: "",
       displayName: p.displayName,
       avatar: p.avatarUrl || "",
-      coverImage: p.coverImageUrl || "",
+      coverImage: "",
       bio: p.bio || "",
-      followers: 0,
+      followers: p.followersCount ?? 0,
       following: 0,
       posts: 0,
       isVerified: false,
     }));
-  } catch {
+  } catch (err) {
+    console.error("[searchUsers] API error:", err);
+    console.error("[searchUsers] error response:", (err as any)?.response?.data);
+    console.error("[searchUsers] error status:", (err as any)?.response?.status);
     await delay(300);
     const lowerQuery = query.toLowerCase();
     return mockUsers.filter(
@@ -181,16 +197,16 @@ function transformBEUserProfile(
   stats: BE_FollowStats,
 ): User {
   return {
-    id: profile.userId,
+    id: profile?.userId ?? "",
     username: "",
-    displayName: profile.displayName,
+    displayName: profile?.displayName ?? "",
     avatar: normalizeAvatarUrlFromProfile(profile),
     coverImage: normalizeCoverUrlFromProfile(profile),
-    bio: profile.bio || "",
-    website: profile.website || undefined,
-    followers: stats.followersCount,
-    following: stats.followingCount,
-    posts: stats.postsCount,
+    bio: profile?.bio || "",
+    website: profile?.website || undefined,
+    followers: stats?.followersCount ?? 0,
+    following: stats?.followingCount ?? 0,
+    posts: stats?.postsCount ?? 0,
     isVerified: false,
   };
 }
@@ -428,7 +444,7 @@ export function isFollowing(userId: string): boolean {
 export async function getFollowers(userId: string): Promise<User[]> {
   try {
     const targetId = userId === "current" ? getCurrentUserId() : userId;
-    const { data } = await apiClient.get<BE_UserProfile[]>(
+    const { data } = await apiClient.get<BE_FollowerListDto[]>(
       `/user/follow/${targetId}/followers`,
       { params: { skip: 0, take: 20 } },
     );
@@ -437,8 +453,8 @@ export async function getFollowers(userId: string): Promise<User[]> {
       username: "",
       displayName: p.displayName,
       avatar: p.avatarUrl || "",
-      coverImage: p.coverImageUrl || "",
-      bio: p.bio || "",
+      coverImage: "",
+      bio: "",
       followers: 0,
       following: 0,
       posts: 0,
@@ -453,7 +469,7 @@ export async function getFollowers(userId: string): Promise<User[]> {
 export async function getFollowing(userId: string): Promise<User[]> {
   try {
     const targetId = userId === "current" ? getCurrentUserId() : userId;
-    const { data } = await apiClient.get<BE_UserProfile[]>(
+    const { data } = await apiClient.get<BE_FollowerListDto[]>(
       `/user/follow/${targetId}/following`,
       { params: { skip: 0, take: 20 } },
     );
@@ -462,8 +478,8 @@ export async function getFollowing(userId: string): Promise<User[]> {
       username: "",
       displayName: p.displayName,
       avatar: p.avatarUrl || "",
-      coverImage: p.coverImageUrl || "",
-      bio: p.bio || "",
+      coverImage: "",
+      bio: "",
       followers: 0,
       following: 0,
       posts: 0,
@@ -548,6 +564,18 @@ export async function updateProfile(updates: {
       return existing;
     }
     return {} as User;
+  }
+}
+
+export async function checkDisplayNameAvailable(displayName: string): Promise<boolean> {
+  try {
+    const { data } = await apiClient.get<{ available: boolean }>(
+      "/user/userprofile/check-displayname",
+      { params: { displayName: displayName.trim() } },
+    );
+    return data.available;
+  } catch {
+    return false;
   }
 }
 

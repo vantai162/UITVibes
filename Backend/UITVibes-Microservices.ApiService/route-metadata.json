@@ -94,6 +94,14 @@
         },
         {
           "method": "PUT",
+          "path": "/user/userprofile/me/displayname",
+          "description": "Update user display name",
+          "requiresAuth": true,
+          "contentType": "application/json",
+          "requestBody": "John Doe"
+        },
+        {
+          "method": "PUT",
           "path": "/user/userprofile/me/bio",
           "description": "Update user bio only",
           "requiresAuth": true,

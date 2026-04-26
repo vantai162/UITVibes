@@ -118,6 +118,18 @@ public class UserProfileController : ControllerBase
         }
     }
 
+    [HttpGet("check-displayname")]
+    public async Task<ActionResult<object>> CheckDisplayNameAvailable([FromQuery] string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return BadRequest(new { message = "Display name is required" });
+        }
+
+        var isAvailable = await _userProfileService.IsDisplayNameAvailableAsync(displayName);
+        return Ok(new { available = isAvailable });
+    }
+
     [HttpPost("me/avatar")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
     public async Task<ActionResult<UserProfileDto>> UploadAvatar([FromForm] UploadImageRequest request)

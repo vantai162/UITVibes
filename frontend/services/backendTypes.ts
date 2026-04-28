@@ -61,6 +61,14 @@ export interface BE_UpdateProfileRequest {
   website?: string;
 }
 
+export interface BE_RecentSearchItem {
+  userId: string;
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  followersCount: number;
+}
+
 export interface BE_SearchUserProfileDto {
   userId: string;
   displayName: string;

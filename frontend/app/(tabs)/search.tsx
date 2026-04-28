@@ -298,17 +298,19 @@ export default function SearchScreen() {
       />
 
       {activeTab === 'posts' ? (
-        <FlatList
-          data={posts}
-          renderItem={renderPostItem}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          showsVerticalScrollIndicator={false}
-        />
+        <View key="posts-tab">
+          <FlatList
+            data={posts}
+            renderItem={renderPostItem}
+            keyExtractor={(item) => item.id}
+            numColumns={3}
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
       ) : showRecentSearches ? (
         renderRecentList()
       ) : (
-        <>
+        <View key="users-tab">
           {isSearching ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={AppColors.primary} />
@@ -334,7 +336,7 @@ export default function SearchScreen() {
               }
             />
           )}
-        </>
+        </View>
       )}
     </SafeAreaView>
   );

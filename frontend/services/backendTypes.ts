@@ -134,10 +134,12 @@ export interface BE_CommentResponse {
   userId: string;
   content: string;
   likesCount: number;
+  repliesCount?: number;
   isLikedByCurrentUser: boolean;
   createdAt: string;
+  updatedAt?: string;
   replies: BE_CommentResponse[];
-  parentId: string | null;
+  parentCommentId: string | null; // PascalCase from backend
 }
 
 export interface BE_ConversationResponse {

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using MessageService.DTOs;
 using MessageService.ServiceLayer.Interface;
 
@@ -25,12 +25,15 @@ public class ChatHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var userId = GetUserId();
+        var userId = ParseUserId(); // đọc từ HttpContext lúc connect
         if (userId == Guid.Empty)
         {
             Context.Abort();
             return;
         }
+
+        // Lưu vào Context.Items — tồn tại suốt vòng đời connection
+        Context.Items["UserId"] = userId;
 
         // Track user online status
         await _onlineTrackingService.SetUserOnlineAsync(userId, Context.ConnectionId);
@@ -52,6 +55,7 @@ public class ChatHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        // Lấy từ Context.Items — luôn có, kể cả khi HttpContext đã null
         var userId = GetUserId();
         if (userId != Guid.Empty)
         {
@@ -203,16 +207,27 @@ public class ChatHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
     }
 
+    /// <summary>
+    /// Dùng trong mọi method — đọc từ Context.Items (luôn available)
+    /// </summary>
     private Guid GetUserId()
     {
-        var userIdHeader = Context.GetHttpContext()?.Request.Headers["X-User-Id"].FirstOrDefault()
-            ?? Context.GetHttpContext()?.Request.Query["userId"].FirstOrDefault();
+        if (Context.Items.TryGetValue("UserId", out var value) && value is Guid userId)
+            return userId;
 
-        if (string.IsNullOrEmpty(userIdHeader) || !Guid.TryParse(userIdHeader, out var userId))
-        {
-            return Guid.Empty;
-        }
+        _logger.LogWarning("UserId not found in Context.Items — ConnectionId: {ConnectionId}",
+            Context.ConnectionId);
+        return Guid.Empty;
+    }
 
-        return userId;
+    /// <summary>
+    /// Chỉ gọi 1 lần trong OnConnectedAsync — đọc từ HttpContext
+    /// </summary>
+    private Guid ParseUserId()
+    {
+        var header = Context.GetHttpContext()?.Request.Headers["X-User-Id"].FirstOrDefault();
+        return !string.IsNullOrEmpty(header) && Guid.TryParse(header, out var id)
+            ? id
+            : Guid.Empty;
     }
 }

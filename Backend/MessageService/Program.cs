@@ -21,15 +21,12 @@ builder.AddRabbitMQClient("messaging");
 // Register services
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IMessageService, ChatMessageService>();
-builder.Services.AddSingleton<IOnlineTrackingService, OnlineTrackingService>();
+builder.Services.AddScoped<IFriendListRpcClient, FriendListRpcClient>();
+builder.Services.AddScoped<IOnlineTrackingService, OnlineTrackingService>();
 
 // Add SignalR with Redis backplane for scaling
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(options =>
-    {
-        options.Configuration.ChannelPrefix = RedisChannel.Literal("MessageService");
-    });
-
+builder.Services.AddSignalR();
+   
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -40,6 +37,19 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "Real-time messaging service with SignalR"
     });
+});
+
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("http://127.0.0.1:5500")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
 });
 
 var app = builder.Build();
@@ -82,6 +92,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+
+app.UseCors("AllowFrontend");
 
 app.MapControllers();
 

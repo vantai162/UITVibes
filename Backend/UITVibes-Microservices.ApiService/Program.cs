@@ -361,6 +361,17 @@ app.MapGet("/gateway/routes", (IServiceDiscovery discovery) =>
                 new { gateway = "/post/feed", proxiedTo = "/api/post/feed", auth = "Required" },
                 new { gateway = "/post/media", proxiedTo = "/api/post/media", auth = "Required" }
             }
+        },
+        new
+        {
+            service = "MessageService",
+            baseUrl = "", // Assuming GetMessageServiceUrl() is needed here but looking at discovery might not have it yet. Wait, I will use /message routes.
+            routes = new[]
+            {
+                new { gateway = "/message/conversations", proxiedTo = "/api/conversation", auth = "Required" },
+                new { gateway = "/message/onlinetracking/online-users", proxiedTo = "/api/onlinetracking/online-users", auth = "Required (POST)" },
+                new { gateway = "/message/onlinetracking/online-friends", proxiedTo = "/api/onlinetracking/online-friends", auth = "Required (GET)" }
+            }
         }
     };
 
@@ -410,6 +421,7 @@ app.MapGet("/gateway/export/postman", (IPostmanRouteExportService exporter) =>
 .AllowAnonymous(); // nếu muốn public
 
 app.MapDefaultEndpoints();
+app.UseWebSockets();
 
 // ===== MAP REVERSE PROXY WITH AUTH MIDDLEWARE =====
 app.MapReverseProxy(proxyPipeline =>

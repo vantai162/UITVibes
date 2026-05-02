@@ -225,9 +225,37 @@ public class ChatHub : Hub
     /// </summary>
     private Guid ParseUserId()
     {
-        var header = Context.GetHttpContext()?.Request.Headers["X-User-Id"].FirstOrDefault();
-        return !string.IsNullOrEmpty(header) && Guid.TryParse(header, out var id)
-            ? id
-            : Guid.Empty;
+        var httpContext = Context.GetHttpContext();
+
+        // Đọc từ header X-User-Id (khi qua Gateway)
+        var fromHeader = httpContext?.Request.Headers["X-User-Id"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(fromHeader) && Guid.TryParse(fromHeader, out var headerUserId))
+            return headerUserId;
+
+        // Fallback — đọc từ query string (khi test trực tiếp)
+        var fromQuery = httpContext?.Request.Query["userId"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(fromQuery) && Guid.TryParse(fromQuery, out var queryUserId))
+            return queryUserId;
+
+        // ✅ Thêm — decode access_token từ query string (khi Gateway forward token)
+        var accessToken = httpContext?.Request.Query["access_token"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(accessToken))
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (handler.CanReadToken(accessToken))
+            {
+                var jwt = handler.ReadJwtToken(accessToken);
+                var userId = jwt.Claims.FirstOrDefault(c =>
+                    c.Type == "sub" ||
+                    c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var tokenUserId))
+                    return tokenUserId;
+            }
+        }
+
+        return Guid.Empty;
+
+
     }
 }

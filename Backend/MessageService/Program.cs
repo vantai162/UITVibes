@@ -24,6 +24,14 @@ builder.Services.AddScoped<IMessageService, ChatMessageService>();
 builder.Services.AddScoped<IFriendListRpcClient, FriendListRpcClient>();
 builder.Services.AddScoped<IOnlineTrackingService, OnlineTrackingService>();
 
+// Register named HttpClient for UserService (used to enrich member profiles)
+// Goes through gateway so X-User-Id header is auto-forwarded
+builder.Services.AddHttpClient("UserService", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5512");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 // Add SignalR with Redis backplane for scaling
 builder.Services.AddSignalR();
    

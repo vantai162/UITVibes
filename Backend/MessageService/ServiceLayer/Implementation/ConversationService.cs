@@ -1,7 +1,8 @@
-﻿using MessageService.DTOs;
+using MessageService.DTOs;
 using MessageService.Models;
 using MessageService.ServiceLayer.Interface;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Json;
 
 namespace MessageService.ServiceLayer.Implementation
 {
@@ -9,11 +10,16 @@ namespace MessageService.ServiceLayer.Implementation
     {
         private readonly MessageDbContext _context;
         private readonly ILogger<ConversationService> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public ConversationService(MessageDbContext context, ILogger<ConversationService> logger)
+        public ConversationService(
+            MessageDbContext context,
+            ILogger<ConversationService> logger,
+            IHttpClientFactory httpClientFactory)
         {
             _context = context;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
         }
 
         public async Task AddMemberToGroupAsync(Guid conversationId, Guid userId, Guid targetUserId)
@@ -262,6 +268,47 @@ namespace MessageService.ServiceLayer.Implementation
                                      m.SenderId != currentUserId);
             }
 
+            // Enrich member data with displayName + avatar from UserService
+            var memberDtos = new List<ConversationMemberDto>();
+            foreach (var m in conversation.Members.Where(m => m.LeftAt == null))
+            {
+                var dto = new ConversationMemberDto
+                {
+                    UserId = m.UserId,
+                    Role = m.Role.ToString(),
+                    Nickname = m.Nickname,
+                    LastReadAt = m.LastReadAt,
+                    JoinedAt = m.JoinedAt,
+                    DisplayName = null,
+                    AvatarUrl = null
+                };
+
+                try
+                {
+                    var client = _httpClientFactory.CreateClient("UserService");
+                    // Gateway route: /user/userprofile/{guid} → /api/userprofile/{guid}
+                    var profile = await client.GetFromJsonAsync<UserProfileResponse>(
+                        $"/user/userprofile/{m.UserId}");
+                    if (profile != null)
+                    {
+                        dto.DisplayName = profile.DisplayName ?? profile.FullName ?? m.UserId.ToString();
+                        dto.AvatarUrl = profile.AvatarUrl;
+                        _logger.LogDebug(
+                            "Enriched member {UserId} → displayName={DisplayName}, avatar={AvatarUrl}",
+                            m.UserId, dto.DisplayName, dto.AvatarUrl);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Failed to fetch profile for user {UserId} — falling back to UserId string",
+                        m.UserId);
+                    dto.DisplayName = m.UserId.ToString(); // fallback to userId
+                }
+
+                memberDtos.Add(dto);
+            }
+
             return new ConversationDto
             {
                 Id = conversation.Id,
@@ -273,16 +320,7 @@ namespace MessageService.ServiceLayer.Implementation
                 LastMessageAt = conversation.LastMessageAt,
                 UnreadCount = unreadCount,
                 CreatedAt = conversation.CreatedAt,
-                Members = conversation.Members
-                    .Where(m => m.LeftAt == null)
-                    .Select(m => new ConversationMemberDto
-                    {
-                        UserId = m.UserId,
-                        Role = m.Role.ToString(),
-                        Nickname = m.Nickname,
-                        LastReadAt = m.LastReadAt,
-                        JoinedAt = m.JoinedAt
-                    }).ToList()
+                Members = memberDtos
             };
         }
     }

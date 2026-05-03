@@ -1,4 +1,4 @@
-﻿namespace MessageService.DTOs
+namespace MessageService.DTOs
 {
     public class ConversationMemberDto
     {
@@ -7,5 +7,8 @@
         public string? Nickname { get; set; }
         public DateTime? LastReadAt { get; set; }
         public DateTime JoinedAt { get; set; }
+        // Enriched from UserService
+        public string? DisplayName { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 }

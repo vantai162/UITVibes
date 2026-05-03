@@ -10,8 +10,8 @@ import { BE_ConversationResponse, BE_MessageResponse } from "./backendTypes";
 const GW = "/message";
 
 function transformBEConversation(c: BE_ConversationResponse): Conversation {
-  // Backend enriches members with displayName + avatarUrl from UserService.
-  // Fallback: use userId string if displayName is missing.
+  // Backend returns members array of { userId, username?, displayName, avatarUrl }
+  // and also a separate members (ConversationMemberDto) array when requesting single conv.
   const memberArr = c.members ?? [];
   return {
     id: c.id,
@@ -20,11 +20,8 @@ function transformBEConversation(c: BE_ConversationResponse): Conversation {
     avatar: c.avatarUrl ?? undefined,
     members: memberArr.map((m) => ({
       id: m.userId,
-      // Primary: enriched displayName from UserService; fallback to userId
-      username: m.displayName ?? m.userId,
-      // Primary: enriched displayName; fallback to userId
-      displayName: m.displayName ?? m.userId,
-      // Primary: enriched avatarUrl from UserService
+      username: m.username ?? "",
+      displayName: m.displayName,
       avatar: m.avatarUrl ?? "",
       bio: "",
       followers: 0,
@@ -165,12 +162,33 @@ export async function getMessages(
     ),
   ]);
 
-  // Backend enriches members with displayName + avatarUrl from UserService.
-  const conv = transformBEConversation(convRes.data);
+  // Members from the conversation list endpoint have { userId, username?, displayName, avatarUrl }
+  // Build the member map using whichever shape the backend returned.
+  const rawMembers = convRes.data.members ?? [];
+  const members: Conversation["members"] = rawMembers.map((m) => ({
+    id: m.userId,
+    username: "username" in m && typeof m.username === "string"
+      ? m.username
+      : m.userId,
+    displayName: "displayName" in m && typeof m.displayName === "string"
+      ? m.displayName
+      : "displayName" in m && (m as Record<string, unknown>).displayName === undefined
+      ? m.userId
+      : "User",
+    avatar:
+      "avatarUrl" in m && typeof m.avatarUrl === "string"
+        ? m.avatarUrl
+        : "",
+    bio: "",
+    followers: 0,
+    following: 0,
+    posts: 0,
+    isVerified: false,
+  }));
 
   return {
-    messages: msgRes.data.map((m) => transformBEMessage(m, conv.members)),
-    members: conv.members,
+    messages: msgRes.data.map((m) => transformBEMessage(m, members)),
+    members,
   };
 }
 

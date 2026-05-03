@@ -24,14 +24,6 @@ builder.Services.AddScoped<IMessageService, ChatMessageService>();
 builder.Services.AddScoped<IFriendListRpcClient, FriendListRpcClient>();
 builder.Services.AddScoped<IOnlineTrackingService, OnlineTrackingService>();
 
-// Register named HttpClient for UserService (used to enrich member profiles)
-// Goes through gateway so X-User-Id header is auto-forwarded
-builder.Services.AddHttpClient("UserService", client =>
-{
-    client.BaseAddress = new Uri("http://localhost:5512");
-    client.Timeout = TimeSpan.FromSeconds(5);
-});
-
 // Add SignalR with Redis backplane for scaling
 builder.Services.AddSignalR();
    
@@ -53,10 +45,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://127.0.0.1:5500", 
-                "http://localhost:3000", 
-                "http://localhost:8081",
-                "http://localhost:7497")
+            policy.WithOrigins("http://127.0.0.1:5500")
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
@@ -106,10 +95,6 @@ if (app.Environment.IsDevelopment())
 
 
 app.UseCors("AllowFrontend");
-app.UseWebSockets();        // ← phải trước MapHub
-app.UseAuthentication();    // ← thêm vào
-app.UseAuthorization();     
-
 
 app.MapControllers();
 

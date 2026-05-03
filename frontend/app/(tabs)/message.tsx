@@ -348,9 +348,7 @@ export default function MessageScreen() {
   // ─── Helpers ──────────────────────────────────────────────────────────────
   const getOtherMember = useCallback(
     (conv: Conversation): User | undefined => {
-      const other = conv.members.find((m) => m.id !== currentUser?.id);
-      console.log("[getOtherMember] currentUser.id:", currentUser?.id, "members:", conv.members.map(m => m.id), "→ selected:", other);
-      return other;
+      return conv.members.find((m) => m.id !== currentUser?.id);
     },
     [currentUser?.id]
   );
@@ -375,23 +373,9 @@ export default function MessageScreen() {
   }: {
     item: Conversation;
   }): React.JSX.Element => {
-    console.log("[renderConversationItem] conversation item:", JSON.stringify(item, null, 2));
-
     const other = getOtherMember(item);
-    console.log("[renderConversationItem] other member:", other);
-
     const hasUnread = item.unreadCount > 0;
     const isGroup = item.isGroup;
-
-    // Derive display name for the conversation header
-    const displayName = isGroup
-      ? item.name ?? "Group Chat"
-      : other?.displayName ?? other?.username ?? "Người dùng ẩn danh";
-
-    // Derive avatar URL — enriched from UserService, with fallback
-    const avatarUri = isGroup
-      ? item.avatar
-      : other?.avatar;
 
     return (
       <TouchableOpacity
@@ -401,15 +385,11 @@ export default function MessageScreen() {
       >
         {isGroup ? (
           <View style={styles.groupAvatar}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} />
-            ) : (
-              <Feather name="users" size={22} color={AppColors.iconMuted} strokeWidth={2} />
-            )}
+            <Feather name="users" size={22} color={AppColors.iconMuted} strokeWidth={2} />
           </View>
         ) : (
           <Image
-            source={avatarUri ? { uri: avatarUri } : defaultAvatar}
+            source={other?.avatar ? { uri: other.avatar } : defaultAvatar}
             style={styles.avatar}
           />
         )}
@@ -419,7 +399,7 @@ export default function MessageScreen() {
               style={[styles.convName, hasUnread && styles.convNameBold]}
               numberOfLines={1}
             >
-              {displayName}
+              {isGroup ? item.name : other?.displayName}
             </Text>
             <Text style={styles.convTime}>
               {item.lastMessage?.createdAt &&
@@ -570,8 +550,8 @@ export default function MessageScreen() {
             <View>
               <Text style={styles.chatName} numberOfLines={1}>
                 {isGroup
-                  ? activeConversation.name ?? "Group Chat"
-                  : otherUser?.displayName ?? otherUser?.username ?? "Người dùng ẩn danh"}
+                  ? activeConversation.name
+                  : otherUser?.displayName}
               </Text>
               {isGroup && (
                 <Text style={styles.chatSubtitle}>

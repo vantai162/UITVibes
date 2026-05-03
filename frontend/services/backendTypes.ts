@@ -163,21 +163,22 @@ export interface BE_ConversationResponse {
   avatarUrl: string | null;
   members: Array<{
     userId: string;
-    // Enriched fields from UserService
-    displayName: string | null;
-    avatarUrl: string | null;
-    // Legacy/optional fields
     username?: string;
-    role?: string;
-    nickname?: string | null;
-    lastReadAt?: string | null;
-    joinedAt?: string;
+    displayName: string;
+    avatarUrl: string | null;
   }>;
   lastMessageContent: string | null;
   lastMessageSenderId: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
   createdAt: string;
+  members?: Array<{
+    userId: string;
+    role: string;
+    nickname: string | null;
+    lastReadAt: string | null;
+    joinedAt: string;
+  }>;
   updatedAt?: string;
   isMuted?: boolean;
   isPinned?: boolean;

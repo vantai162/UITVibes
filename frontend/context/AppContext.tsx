@@ -186,6 +186,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         return true;
       } catch (error) {
         console.error("Login failed:", error);
+        const errorCode = (error as any)?.errorCode;
+        if (errorCode) {
+          setIsLoading(false);
+          const errWithCode = error as Error & { errorCode: string; email: string };
+          throw errWithCode;
+        }
         const message =
           error instanceof Error && error.message
             ? error.message
@@ -268,10 +274,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           prev ? { ...prev, displayName: name } : prev,
         );
         api.patchCurrentUserLocal({ displayName: name });
-        // Persist displayName to UserDB via UserService API
-        api.updateProfile({ displayName: name }).catch((err) => {
-          console.error("[AppContext] Failed to persist displayName:", err);
-        });
       }
       if (typeof data.fullName === "string" && data.fullName.trim()) {
         const name = data.fullName.trim();
@@ -279,10 +281,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           prev ? { ...prev, fullName: name } : prev,
         );
         api.patchCurrentUserLocal({ fullName: name });
-        // Persist fullName to UserDB via UserService API
-        api.updateProfile({ fullName: name }).catch((err) => {
-          console.error("[AppContext] Failed to persist fullName:", err);
-        });
       }
       if (typeof data.gender === "string") {
         const gender = data.gender;
@@ -290,20 +288,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           prev ? { ...prev, gender } : prev,
         );
         api.patchCurrentUserLocal({ gender });
-        // Persist gender to UserDB via UserService API
-        api.updateProfile({ gender }).catch((err) => {
-          console.error("[AppContext] Failed to persist gender:", err);
-        });
       }
       if (typeof data.bio === "string") {
         const bio = data.bio;
         setCurrentUser((prev) =>
           prev ? { ...prev, bio } : prev,
         );
-        // Persist bio to UserDB via UserService API
-        api.updateProfile({ bio }).catch((err) => {
-          console.error("[AppContext] Failed to persist bio:", err);
-        });
+        api.patchCurrentUserLocal({ bio });
       }
     },
     [],

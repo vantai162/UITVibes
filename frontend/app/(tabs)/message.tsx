@@ -72,6 +72,7 @@ export default function MessageScreen() {
   const [isRemovingMember, setIsRemovingMember] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const messagesEndRef = useRef<View>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [convMembers, setConvMembers] = useState<Conversation["members"]>([]);
 
@@ -101,12 +102,12 @@ export default function MessageScreen() {
     }
   }, [activeConversation?.id]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change — old messages go to top, new messages go to bottom
   useEffect(() => {
     if (messages.length > 0 && activeConversation) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 150);
+      }, 80);
     }
   }, [messages.length, activeConversation?.id]);
 
@@ -626,9 +627,7 @@ export default function MessageScreen() {
                 </Text>
               </View>
             }
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
+            ListFooterComponent={<View ref={messagesEndRef} />}
           />
         )}
 

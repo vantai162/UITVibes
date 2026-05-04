@@ -635,7 +635,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setMessages([]);
     try {
       const { messages: msgs, members } = await api.getMessages(conversationId);
-      setMessages(msgs);
+      // API trả về: tin mới nhất ở đầu → cần đảo để có thứ tự Cũ→Mới (đúng cho FlatList)
+      setMessages([...msgs].reverse());
       setConversationMembers(members);
     } catch (error: any) {
       const msg = error?.response?.data?.message ?? "Failed to load messages.";

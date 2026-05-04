@@ -42,9 +42,9 @@ export interface UseOnlineUsersReturn {
   isOnline: (userId: string) => boolean;
   /** Force-refresh from REST API */
   refresh: () => Promise<void>;
-  /** Manually start the SignalR connection (called automatically on mount) */
+  /** Manually start the SignalR connection (called automatically when authenticated) */
   connect: () => Promise<void>;
-  /** Manually disconnect SignalR (called automatically on unmount) */
+  /** Manually disconnect SignalR (called automatically on sign out) */
   disconnect: () => Promise<void>;
 }
 
@@ -53,7 +53,7 @@ export interface UseOnlineUsersReturn {
 /** Normalize any userId to string — handles Number | string | UUID from backend */
 const toStringId = (id: string | number): string => String(id);
 
-export function useOnlineUsers(): UseOnlineUsersReturn {
+export function useOnlineUsers(isAuthenticated: boolean): UseOnlineUsersReturn {
   // onlineUsers is a Set for O(1) lookup — we store it as an array internally
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -112,7 +112,7 @@ export function useOnlineUsers(): UseOnlineUsersReturn {
     try {
       // GET /message/onlinetracking/online-friends
       const friends = await getOnlineFriends();
-      rebuildSet(friends.map((f) => f.userId));
+      rebuildSet(friends.filter((f) => f.isOnline).map((f) => f.userId));
     } catch (err) {
       console.warn("[useOnlineUsers] Failed to fetch online friends:", err);
     } finally {
@@ -173,18 +173,9 @@ export function useOnlineUsers(): UseOnlineUsersReturn {
     await stopConnection();
   }, [stopHeartbeat]);
 
-  // ── Auto-start on mount ─────────────────────────────────────────────────────
+  // ── Connection state listener ─────────────────────────────────────────────
 
   useEffect(() => {
-    // 1. Fetch initial data from REST
-    fetchOnlineFriends();
-
-    // 2. Auto-connect SignalR when the app is authenticated
-    connect().catch((err) => {
-      console.warn("[useOnlineUsers] Auto-connect failed:", err);
-    });
-
-    // 3. Listen to connection state changes
     const removeListener = addConnectionStateListener(({ next }) => {
       setIsConnected(next === "Connected");
     });
@@ -192,7 +183,6 @@ export function useOnlineUsers(): UseOnlineUsersReturn {
     // Set initial state from service
     setIsConnected(getConnectionState() === "Connected");
 
-    // ── Cleanup on unmount ──
     return () => {
       removeListener();
       stopHeartbeat();
@@ -200,6 +190,20 @@ export function useOnlineUsers(): UseOnlineUsersReturn {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Auto-connect based on auth state ──────────────────────────────────────
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOnlineFriends();
+      connect().catch((err) => {
+        console.warn("[useOnlineUsers] Auto-connect failed:", err);
+      });
+      return;
+    }
+
+    disconnect().catch(() => {});
+  }, [isAuthenticated, fetchOnlineFriends, connect, disconnect]);
 
   return {
     onlineUsers: new Set(onlineUserIds),

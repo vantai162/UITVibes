@@ -337,7 +337,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   // ─── Online Status ────────────────────────────────────────
-  const { isOnline, isConnected: onlineSignalRConnected } = useOnlineUsers();
+  const { isOnline, isConnected: onlineSignalRConnected } = useOnlineUsers(isAuthenticated);
 
   // ─── Feed Actions ────────────────────────────────────────
   const refreshPosts = useCallback(async () => {

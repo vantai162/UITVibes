@@ -44,6 +44,7 @@ export default function MessageScreen() {
     setActiveConversation,
     setMessages,
     markMessagesRead,
+    markConversationAsRead,
     startConversation,
     suggestedUsers,
     fetchSuggestedUsers,
@@ -82,6 +83,17 @@ export default function MessageScreen() {
       Alert.alert("Error", "Failed to load conversations. Pull to retry.")
     );
   }, []);
+
+  // Sync activeConversation with updated conversation from conversations array
+  // This ensures activeConversation reflects the latest unreadCount after local updates
+  useEffect(() => {
+    if (activeConversation && conversations.length > 0) {
+      const updatedConv = conversations.find((c) => c.id === activeConversation.id);
+      if (updatedConv) {
+        setActiveConversation(updatedConv);
+      }
+    }
+  }, [conversations]);
 
   // Load messages when entering a conversation — load + mark-as-read in one atomic flow
   useEffect(() => {
@@ -246,14 +258,24 @@ export default function MessageScreen() {
     setActiveConversation(null);
     setMessageText("");
     setConvMembers([]);
-    refreshConversations().catch(() => {});
-  }, [setActiveConversation, refreshConversations]);
+    // Don't call refreshConversations here — it would re-fetch from server
+    // and could overwrite the optimistic unreadCount=0 set by markConversationAsRead.
+    // The next handleConversationPress will trigger a fresh refresh when needed.
+  }, [setActiveConversation]);
 
   const handleConversationPress = useCallback(
     async (conv: Conversation) => {
+      // 1. IMMEDIATELY update local state: mark conversation as read (unreadCount = 0)
+      // This ensures the UI updates BEFORE we set activeConversation
+      markConversationAsRead(conv.id);
+      
+      // 2. Set active conversation for message loading
       setActiveConversation(conv);
+      
+      // Note: markMessagesRead() will be triggered by the useEffect below
+      // when activeConversation?.id changes
     },
-    [setActiveConversation]
+    [setActiveConversation, markConversationAsRead]
   );
 
   // ─── Group Chat ────────────────────────────────────────────────────────────
@@ -805,6 +827,7 @@ export default function MessageScreen() {
             Alert.alert("Error", "Failed to refresh conversations.")
           )
         }
+        extraData={[filteredConversations, activeConversation]}
         ListHeaderComponent={
           isLoadingConversations && conversations.length === 0 ? (
             <>{[1, 2, 3, 4, 5].map((i) => <View key={i}>{renderLoadingItem()}</View>)}</>

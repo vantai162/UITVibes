@@ -103,6 +103,7 @@ interface AppContextType {
   setActiveConversation: (conv: Conversation | null) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   markMessagesRead: (conversationId: string) => Promise<void>;
+  markConversationAsRead: (conversationId: string) => void;
   startConversation: (userId: string) => Promise<Conversation | null>;
 
   // Notifications
@@ -675,12 +676,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         if (lastMsg) {
           await api.markMessagesRead(conversationId, lastMsg.id);
         }
-        await refreshConversations();
+        // Update local state instead of refreshConversations to avoid overwriting unreadCount=0
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+          )
+        );
       } catch (error) {
         console.error("[AppContext] markMessagesRead:", error);
       }
     },
-    [refreshConversations, messages],
+    [messages],
+  );
+
+  // ─── Mark Conversation As Read (Local State Update) ───────────────────────
+  // Updates local state immediately — does NOT call API (markMessagesRead handles that)
+  const markConversationAsRead = useCallback(
+    (conversationId: string) => {
+      console.log("[AppContext] markConversationAsRead: updating local state for conv:", conversationId);
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+        )
+      );
+    },
+    []
   );
 
   const startConversation = useCallback(
@@ -853,6 +873,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setActiveConversation,
         setMessages,
         markMessagesRead,
+        markConversationAsRead,
         startConversation,
         notifications,
         unreadCount,

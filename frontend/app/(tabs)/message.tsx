@@ -25,6 +25,7 @@ import { Typography } from "../../constants/typography";
 import { Header } from "../../components";
 import { Avatar } from "../../components/Avatar";
 import { OnlineIndicator } from "../../components/OnlineIndicator";
+import { OnlineFriendsList } from "../../components/OnlineFriendsList";
 import { formatDistanceToNow } from "../../utils/time";
 
 export default function MessageScreen() {
@@ -174,14 +175,13 @@ export default function MessageScreen() {
       }
 
       // 3. Set active conversation
+             // 3. Set active conversation
       console.log("[MessageScreen] Setting activeConversation:", conv.id, conv.name ?? "private");
       setActiveConversation(conv);
 
-      // 4. Refresh conversations list
-      console.log("[MessageScreen] Refreshing conversations...");
-      await refreshConversations();
-      console.log("[MessageScreen] Conversations refreshed.");
-
+      // 4. Clear search state
+      setNewMsgSearch("");
+      setSearchResults([]);
       // 5. Clear search state
       setNewMsgSearch("");
       setSearchResults([]);
@@ -198,6 +198,15 @@ export default function MessageScreen() {
       setStartingConvUserId(null);
     }
   };
+  
+  const handleFriendPress = useCallback(
+  async (friend: { userId: string; displayName: string }) => {
+    await handleSelectUser(
+      friend as unknown as User  // cast vì handleSelectUser nhận User type
+    );
+  },
+  []
+);
 
   const filteredConversations = conversations.filter((conv) => {
     if (!searchQuery) return true;
@@ -264,19 +273,12 @@ export default function MessageScreen() {
   }, [setActiveConversation]);
 
   const handleConversationPress = useCallback(
-    async (conv: Conversation) => {
-      // 1. IMMEDIATELY update local state: mark conversation as read (unreadCount = 0)
-      // This ensures the UI updates BEFORE we set activeConversation
-      markConversationAsRead(conv.id);
-      
-      // 2. Set active conversation for message loading
-      setActiveConversation(conv);
-      
-      // Note: markMessagesRead() will be triggered by the useEffect below
-      // when activeConversation?.id changes
-    },
-    [setActiveConversation, markConversationAsRead]
-  );
+  async (conv: Conversation) => {
+    await markConversationAsRead(conv.id);
+    setActiveConversation(conv);
+  },
+  [setActiveConversation, markConversationAsRead]
+);
 
   // ─── Group Chat ────────────────────────────────────────────────────────────
   const { createGroupConversation, addMemberToGroup, removeMemberFromGroup, leaveGroup } =
@@ -814,6 +816,24 @@ export default function MessageScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Online Friends Strip */}
+      <OnlineFriendsList
+        onFriendPress={(friend) =>
+          handleSelectUser({
+            id: friend.userId,
+            username: friend.displayName,
+            displayName: friend.displayName,
+            avatar: friend.avatarUrl ?? "",
+            bio: "",
+            coverImage: "",
+            followers: 0,
+            following: 0,
+            posts: 0,
+            isVerified: false,
+          } as User)
+        }
+      />
+      
       {/* Conversation List */}
       <FlatList
         data={filteredConversations}

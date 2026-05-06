@@ -181,6 +181,8 @@ export interface BE_ConversationResponse {
     nickname: string | null;
     lastReadAt: string | null;
     joinedAt: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
   }>;
   updatedAt?: string;
   isMuted?: boolean;

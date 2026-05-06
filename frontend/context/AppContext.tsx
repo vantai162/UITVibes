@@ -103,7 +103,7 @@ interface AppContextType {
   setActiveConversation: (conv: Conversation | null) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   markMessagesRead: (conversationId: string) => Promise<void>;
-  markConversationAsRead: (conversationId: string) => void;
+  markConversationAsRead: (conversationId: string) => Promise<void>;
   startConversation: (userId: string) => Promise<Conversation | null>;
 
   // Notifications
@@ -692,36 +692,48 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ─── Mark Conversation As Read (Local State Update) ───────────────────────
   // Updates local state immediately — does NOT call API (markMessagesRead handles that)
   const markConversationAsRead = useCallback(
-    (conversationId: string) => {
-      console.log("[AppContext] markConversationAsRead: updating local state for conv:", conversationId);
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-        )
-      );
-    },
-    []
-  );
+  async (conversationId: string) => {
+    console.log("[AppContext] markConversationAsRead: marking conv as read:", conversationId);
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+      )
+    );
+    try {
+      const conv = conversations.find((c) => c.id === conversationId);
+      const lastMsgId = conv?.lastMessage?.id;
+      if (lastMsgId) {
+        await api.markMessagesRead(conversationId, lastMsgId);
+      }
+    } catch (error) {
+      console.error("[AppContext] markConversationAsRead: API call failed:", error);
+    }
+  },
+  [conversations]
+);
 
   const startConversation = useCallback(
-    async (userId: string) => {
-      console.log("[AppContext] startConversation: calling API with userId:", userId);
-      let conv;
-      try {
-        conv = await api.createPrivateConversation(userId);
-        console.log("[AppContext] startConversation: API returned conv.id:", conv?.id);
-      } catch (err: any) {
-        const msg = err?.response?.data?.message ?? err?.message ?? "Failed to start conversation.";
-        console.error("[AppContext] startConversation: API FAILED —", msg, err);
-        throw new Error(msg); // ← MUST throw so UI can catch and show Alert
-      }
-      console.log("[AppContext] startConversation: refreshing conversations...");
-      await refreshConversations();
-      console.log("[AppContext] startConversation: done. conv.id =", conv.id);
-      return conv;
-    },
-    [refreshConversations],
-  );
+  async (userId: string) => {
+    console.log("[AppContext] startConversation: calling API with userId:", userId);
+    let conv;
+    try {
+      conv = await api.createPrivateConversation(userId);
+      console.log("[AppContext] startConversation: API returned conv.id:", conv?.id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to start conversation.";
+      console.error("[AppContext] startConversation: API FAILED —", msg, err);
+      throw new Error(msg);
+    }
+    setConversations((prev) => {
+      const exists = prev.some((c) => c.id === conv.id);
+      if (exists) return prev;
+      return [conv, ...prev];
+    });
+    console.log("[AppContext] startConversation: done. conv.id =", conv.id);
+    return conv;
+  },
+  [],
+);
 
   // ─── Notifications ───────────────────────────────────────
   const refreshNotifications = useCallback(async () => {

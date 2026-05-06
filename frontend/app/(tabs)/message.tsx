@@ -23,8 +23,10 @@ import { Conversation, Message, User } from "../../data/mockData";
 import { AppColors, layoutPadding } from "../../constants/theme";
 import { Typography } from "../../constants/typography";
 import { Header } from "../../components";
+import { Avatar } from "../../components/Avatar";
+import { OnlineIndicator } from "../../components/OnlineIndicator";
+import { OnlineFriendsList } from "../../components/OnlineFriendsList";
 import { formatDistanceToNow } from "../../utils/time";
-import defaultAvatar from "../../assets/images/default-avatar.png";
 
 export default function MessageScreen() {
   const router = useRouter();
@@ -43,14 +45,18 @@ export default function MessageScreen() {
     setActiveConversation,
     setMessages,
     markMessagesRead,
+    markConversationAsRead,
     startConversation,
     suggestedUsers,
     fetchSuggestedUsers,
+    isUserOnline,
+    onlineSignalRConnected,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const isSendingRef = useRef(false);
   const [showNewMsg, setShowNewMsg] = useState(false);
   const [newMsgSearch, setNewMsgSearch] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -68,6 +74,7 @@ export default function MessageScreen() {
   const [isRemovingMember, setIsRemovingMember] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const messagesEndRef = useRef<View>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [convMembers, setConvMembers] = useState<Conversation["members"]>([]);
 
@@ -77,6 +84,17 @@ export default function MessageScreen() {
       Alert.alert("Error", "Failed to load conversations. Pull to retry.")
     );
   }, []);
+
+  // Sync activeConversation with updated conversation from conversations array
+  // This ensures activeConversation reflects the latest unreadCount after local updates
+  useEffect(() => {
+    if (activeConversation && conversations.length > 0) {
+      const updatedConv = conversations.find((c) => c.id === activeConversation.id);
+      if (updatedConv) {
+        setActiveConversation(updatedConv);
+      }
+    }
+  }, [conversations]);
 
   // Load messages when entering a conversation — load + mark-as-read in one atomic flow
   useEffect(() => {
@@ -97,12 +115,12 @@ export default function MessageScreen() {
     }
   }, [activeConversation?.id]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change — old messages go to top, new messages go to bottom
   useEffect(() => {
     if (messages.length > 0 && activeConversation) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 150);
+      }, 80);
     }
   }, [messages.length, activeConversation?.id]);
 
@@ -157,14 +175,13 @@ export default function MessageScreen() {
       }
 
       // 3. Set active conversation
+             // 3. Set active conversation
       console.log("[MessageScreen] Setting activeConversation:", conv.id, conv.name ?? "private");
       setActiveConversation(conv);
 
-      // 4. Refresh conversations list
-      console.log("[MessageScreen] Refreshing conversations...");
-      await refreshConversations();
-      console.log("[MessageScreen] Conversations refreshed.");
-
+      // 4. Clear search state
+      setNewMsgSearch("");
+      setSearchResults([]);
       // 5. Clear search state
       setNewMsgSearch("");
       setSearchResults([]);
@@ -181,6 +198,15 @@ export default function MessageScreen() {
       setStartingConvUserId(null);
     }
   };
+  
+  const handleFriendPress = useCallback(
+  async (friend: { userId: string; displayName: string }) => {
+    await handleSelectUser(
+      friend as unknown as User  // cast vì handleSelectUser nhận User type
+    );
+  },
+  []
+);
 
   const filteredConversations = conversations.filter((conv) => {
     if (!searchQuery) return true;
@@ -203,20 +229,36 @@ export default function MessageScreen() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Send Message ─────────────────────────────────────────────────────────
+  const handleSendDirect = useCallback(
+    async (text: string) => {
+      if (!activeConversation) return;
+      isSendingRef.current = true;
+      try {
+        await sendMessage(activeConversation.id, text);
+      } catch (err: any) {
+        Alert.alert("Error", err?.message ?? "Failed to send message.");
+        setMessageText(text); // restore on failure
+      } finally {
+        isSendingRef.current = false;
+        setIsTyping(false);
+      }
+    },
+    [activeConversation, sendMessage],
+  );
+
   const handleSend = useCallback(async () => {
     if (!messageText.trim()) return;
     const text = messageText.trim();
-
+    setMessageText("");
+    setIsTyping(false);
     try {
       if (!activeConversation) {
         Alert.alert("Error", "No conversation selected.");
         return;
       }
-      setMessageText("");
-      setIsTyping(false);
       await sendMessage(activeConversation.id, text);
     } catch (err: any) {
-      setMessageText(text); // restore on failure
+      setMessageText(text);
       Alert.alert("Error", err?.message ?? "Failed to send message.");
     }
   }, [messageText, activeConversation, sendMessage]);
@@ -225,15 +267,18 @@ export default function MessageScreen() {
     setActiveConversation(null);
     setMessageText("");
     setConvMembers([]);
-    refreshConversations().catch(() => {});
-  }, [setActiveConversation, refreshConversations]);
+    // Don't call refreshConversations here — it would re-fetch from server
+    // and could overwrite the optimistic unreadCount=0 set by markConversationAsRead.
+    // The next handleConversationPress will trigger a fresh refresh when needed.
+  }, [setActiveConversation]);
 
   const handleConversationPress = useCallback(
-    async (conv: Conversation) => {
-      setActiveConversation(conv);
-    },
-    [setActiveConversation]
-  );
+  async (conv: Conversation) => {
+    await markConversationAsRead(conv.id);
+    setActiveConversation(conv);
+  },
+  [setActiveConversation, markConversationAsRead]
+);
 
   // ─── Group Chat ────────────────────────────────────────────────────────────
   const { createGroupConversation, addMemberToGroup, removeMemberFromGroup, leaveGroup } =
@@ -390,10 +435,14 @@ export default function MessageScreen() {
             <Feather name="users" size={22} color={AppColors.iconMuted} strokeWidth={2} />
           </View>
         ) : (
-          <Image
-            source={avatarUri ? { uri: avatarUri } : defaultAvatar}
-            style={styles.avatar}
-          />
+          <View style={styles.avatarContainer}>
+            <Avatar
+              user={other ?? ({ id: '', username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as User)}
+              size="medium"
+              showOnlineIndicator={true}
+              isOnline={isUserOnline(other?.id ?? '')}
+            />
+          </View>
         )}
         <View style={styles.convContent}>
           <View style={styles.convTop}>
@@ -451,9 +500,11 @@ export default function MessageScreen() {
         {!mine && (
           <View style={styles.msgAvatarContainer}>
             {showAvatar ? (
-              <Image
-                source={sender?.avatar ? { uri: sender.avatar } : defaultAvatar}
-                style={styles.msgAvatar}
+              <Avatar
+                user={sender ?? ({ id: item.senderId, username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as User)}
+                size="tiny"
+                showOnlineIndicator={true}
+                isOnline={isUserOnline(item.senderId)}
               />
             ) : (
               <View style={styles.msgAvatarPlaceholder} />
@@ -542,9 +593,11 @@ export default function MessageScreen() {
             }}
           >
             {otherUser ? (
-              <Image
-                source={headerAvatar ? { uri: headerAvatar } : defaultAvatar}
-                style={styles.chatAvatar}
+              <Avatar
+                user={otherUser}
+                size="small"
+                showOnlineIndicator={true}
+                isOnline={isUserOnline(otherUser.id)}
               />
             ) : (
               <View style={styles.chatAvatarGroup}>
@@ -598,9 +651,7 @@ export default function MessageScreen() {
                 </Text>
               </View>
             }
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
+            ListFooterComponent={<View ref={messagesEndRef} />}
           />
         )}
 
@@ -628,6 +679,16 @@ export default function MessageScreen() {
               placeholderTextColor={AppColors.iconMuted}
               value={messageText}
               onChangeText={(text) => {
+                // Detect Enter without Shift → send immediately
+                if (!isSendingRef.current && text.endsWith('\n') && !text.endsWith('\n\n')) {
+                  const trimmed = text.trimEnd();
+                  setMessageText('');
+                  // handleSend uses messageText from closure — call with the trimmed text directly
+                  if (trimmed.length > 0) {
+                    handleSendDirect(trimmed);
+                  }
+                  return;
+                }
                 setMessageText(text);
                 if (text.length > 0 && !isTyping) {
                   setIsTyping(true);
@@ -755,6 +816,24 @@ export default function MessageScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Online Friends Strip */}
+      <OnlineFriendsList
+        onFriendPress={(friend) =>
+          handleSelectUser({
+            id: friend.userId,
+            username: friend.displayName,
+            displayName: friend.displayName,
+            avatar: friend.avatarUrl ?? "",
+            bio: "",
+            coverImage: "",
+            followers: 0,
+            following: 0,
+            posts: 0,
+            isVerified: false,
+          } as User)
+        }
+      />
+      
       {/* Conversation List */}
       <FlatList
         data={filteredConversations}
@@ -768,6 +847,7 @@ export default function MessageScreen() {
             Alert.alert("Error", "Failed to refresh conversations.")
           )
         }
+        extraData={[filteredConversations, activeConversation]}
         ListHeaderComponent={
           isLoadingConversations && conversations.length === 0 ? (
             <>{[1, 2, 3, 4, 5].map((i) => <View key={i}>{renderLoadingItem()}</View>)}</>
@@ -866,10 +946,14 @@ export default function MessageScreen() {
                     }}
                     disabled={isStarting}
                   >
-                    <Image
-                      source={item.avatar ? { uri: item.avatar } : defaultAvatar}
-                      style={styles.newMsgAvatar}
-                    />
+                    <View style={styles.newMsgAvatarContainer}>
+                      <Avatar
+                        user={item}
+                        size="small"
+                        showOnlineIndicator={true}
+                        isOnline={isUserOnline(item.id)}
+                      />
+                    </View>
                     <View style={styles.newMsgUserInfo}>
                       {isStarting ? (
                         <ActivityIndicator size="small" color={AppColors.primary} />
@@ -951,10 +1035,14 @@ export default function MessageScreen() {
                       );
                     }}
                   >
-                    <Image
-                      source={item.avatar ? { uri: item.avatar } : defaultAvatar}
-                      style={styles.newMsgAvatar}
-                    />
+                    <View style={styles.newMsgAvatarContainer}>
+                      <Avatar
+                        user={item}
+                        size="medium"
+                        showOnlineIndicator={true}
+                        isOnline={isUserOnline(item.id)}
+                      />
+                    </View>
                     <View style={styles.newMsgUserInfo}>
                       <Text style={styles.newMsgUserName}>{item.username}</Text>
                       <Text style={styles.newMsgUserDisplay}>{item.displayName}</Text>
@@ -1060,13 +1148,15 @@ function GroupSettingsModal({
             {members.map((member) => {
               const isSelf = member.id === currentUser?.id;
               const isGroupAdmin = conversation.adminIds?.includes(member.id) ?? false;
-              return (
-                <View key={member.id} style={styles.memberRow}>
-                  <Image
-                    source={member.avatar ? { uri: member.avatar } : defaultAvatar}
-                    style={styles.memberAvatar}
-                  />
-                  <View style={styles.memberInfo}>
+                return (
+                  <View key={member.id} style={styles.memberRow}>
+                    <Avatar
+                      user={member}
+                      size="small"
+                      showOnlineIndicator={true}
+                      isOnline={isUserOnline(member.id)}
+                    />
+                    <View style={styles.memberInfo}>
                     <Text style={styles.memberName}>
                       {member.displayName || member.username}
                       {isSelf && (
@@ -1180,10 +1270,14 @@ function AddMemberSheet({
               onPress={() => onAddMember(item)}
               disabled={isAddingMember}
             >
-              <Image
-                source={item.avatar ? { uri: item.avatar } : defaultAvatar}
-                style={styles.newMsgAvatar}
-              />
+              <View style={styles.newMsgAvatarContainer}>
+                <Avatar
+                  user={item}
+                  size="small"
+                  showOnlineIndicator={true}
+                  isOnline={isUserOnline(item.id)}
+                />
+              </View>
               <View style={styles.newMsgUserInfo}>
                 <Text style={styles.newMsgUserName}>{item.username}</Text>
                 <Text style={styles.newMsgUserDisplay}>{item.displayName}</Text>
@@ -1266,6 +1360,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
+  },
+  avatarContainer: {
+    width: 52,
+    height: 52,
   },
   groupAvatar: {
     width: 52,
@@ -1504,6 +1602,10 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.borderLight,
     justifyContent: "center",
     alignItems: "center",
+  },
+  newMsgAvatarContainer: {
+    width: 44,
+    height: 44,
   },
   newMsgUserInfo: {
     flex: 1,

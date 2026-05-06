@@ -105,6 +105,15 @@ export interface BE_FollowStats {
   isFollowedBy: boolean;
 }
 
+export interface BE_HashtagDto {
+  id: string;
+  name: string;
+  normalizedName: string;
+  usageCount: number;
+  createdAt: string;
+  lastUsedAt: string;
+}
+
 export interface BE_PostResponse {
   id: string;
   userId: string;
@@ -172,6 +181,8 @@ export interface BE_ConversationResponse {
     nickname: string | null;
     lastReadAt: string | null;
     joinedAt: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
   }>;
   updatedAt?: string;
   isMuted?: boolean;
@@ -203,6 +214,8 @@ export interface BE_ConversationMemberDto {
   nickname: string | null;
   lastReadAt: string | null;
   joinedAt: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface BE_LikeResponse {

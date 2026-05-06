@@ -1,4 +1,4 @@
-﻿using MessageService.DTOs;
+using MessageService.DTOs;
 using MessageService.Models;
 using MessageService.ServiceLayer.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -191,21 +191,18 @@ namespace MessageService.ServiceLayer.Implementation
                 .Take(take)
                 .ToListAsync();
 
-            // Lấy tất cả otherUserId của private conversations
-            var privateOtherUserIds = result
-                .Where(c => c.Type == ConversationType.Private)
-                .Select(c => c.Members
-                    .FirstOrDefault(m => m.UserId != userId && m.LeftAt == null)?.UserId)
-                .Where(id => id.HasValue)
-                .Select(id => id!.Value)
+            // Collect ALL member userIds from both private and group conversations
+            var allMemberUserIds = result
+                .SelectMany(c => c.Members.Where(m => m.LeftAt == null))
+                .Select(m => m.UserId)
                 .Distinct()
                 .ToList();
 
-            // Batch RPC — gọi song song, không tuần tự
+            // Batch RPC — fetch profiles for every member in one shot
             var profileCache = new Dictionary<Guid, UserProfileRpcResponse?>();
-            if (privateOtherUserIds.Any())
+            if (allMemberUserIds.Any())
             {
-                var profileTasks = privateOtherUserIds.ToDictionary(
+                var profileTasks = allMemberUserIds.ToDictionary(
                     id => id,
                     id => _userProfileRpcClient.GetUserProfileAsync(id)
                 );
@@ -216,7 +213,7 @@ namespace MessageService.ServiceLayer.Implementation
                     profileCache[id] = task.Result;
             }
 
-            // Map tất cả conversations với profileCache đã có sẵn
+            // Map all conversations using the shared profileCache
             var dtos = new List<ConversationDto>();
             foreach (var conversation in result)
                 dtos.Add(await MapToDtoAsync(conversation, userId, profileCache));
@@ -340,13 +337,33 @@ namespace MessageService.ServiceLayer.Implementation
                 CreatedAt = conversation.CreatedAt,
                 Members = conversation.Members
                     .Where(m => m.LeftAt == null)
-                    .Select(m => new ConversationMemberDto
+                    .Select(m =>
                     {
-                        UserId = m.UserId,
-                        Role = m.Role.ToString(),
-                        Nickname = m.Nickname,
-                        LastReadAt = m.LastReadAt,
-                        JoinedAt = m.JoinedAt
+                        UserProfileRpcResponse? profile = null;
+
+                        if (profileCache != null && profileCache.TryGetValue(m.UserId, out var cached))
+                        {
+                            profile = cached;
+                        }
+                        else
+                        {
+                            // profileCache is null when called from CreatePrivateConversationAsync.
+                            // Fallback: call RPC directly for this member so members always have
+                            // displayName and avatarUrl populated, even for brand-new conversations.
+                            profile = _userProfileRpcClient
+                                .GetUserProfileAsync(m.UserId).Result;
+                        }
+
+                        return new ConversationMemberDto
+                        {
+                            UserId = m.UserId,
+                            Role = m.Role.ToString(),
+                            Nickname = m.Nickname,
+                            LastReadAt = m.LastReadAt,
+                            JoinedAt = m.JoinedAt,
+                            DisplayName = profile?.Found == true ? profile.DisplayName : null,
+                            AvatarUrl = profile?.Found == true ? profile.AvatarUrl : null,
+                        };
                     }).ToList()
             };
         }

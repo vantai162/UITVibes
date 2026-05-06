@@ -15,6 +15,7 @@ import {
 } from '../data/mockData';
 import * as api from '../services/api';
 import type { Story } from '../services/storyService';
+import { useOnlineUsers } from '../hooks/useOnlineUsers';
 
 interface AppContextType {
   // Auth / User
@@ -102,6 +103,7 @@ interface AppContextType {
   setActiveConversation: (conv: Conversation | null) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   markMessagesRead: (conversationId: string) => Promise<void>;
+  markConversationAsRead: (conversationId: string) => Promise<void>;
   startConversation: (userId: string) => Promise<Conversation | null>;
 
   // Notifications
@@ -110,6 +112,10 @@ interface AppContextType {
   refreshNotifications: () => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+
+  // Online Status (SignalR + Redis)
+  isUserOnline: (userId: string) => boolean;
+  onlineSignalRConnected: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -330,6 +336,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ─── Notifications ───────────────────────────────────────
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // ─── Online Status ────────────────────────────────────────
+  const { isOnline, isConnected: onlineSignalRConnected } = useOnlineUsers(isAuthenticated);
 
   // ─── Feed Actions ────────────────────────────────────────
   const refreshPosts = useCallback(async () => {
@@ -627,7 +636,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setMessages([]);
     try {
       const { messages: msgs, members } = await api.getMessages(conversationId);
-      setMessages(msgs);
+      // API trả về: tin mới nhất ở đầu → cần đảo để có thứ tự Cũ→Mới (đúng cho FlatList)
+      setMessages([...msgs].reverse());
       setConversationMembers(members);
     } catch (error: any) {
       const msg = error?.response?.data?.message ?? "Failed to load messages.";
@@ -666,33 +676,64 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         if (lastMsg) {
           await api.markMessagesRead(conversationId, lastMsg.id);
         }
-        await refreshConversations();
+        // Update local state instead of refreshConversations to avoid overwriting unreadCount=0
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+          )
+        );
       } catch (error) {
         console.error("[AppContext] markMessagesRead:", error);
       }
     },
-    [refreshConversations, messages],
+    [messages],
   );
 
-  const startConversation = useCallback(
-    async (userId: string) => {
-      console.log("[AppContext] startConversation: calling API with userId:", userId);
-      let conv;
-      try {
-        conv = await api.createPrivateConversation(userId);
-        console.log("[AppContext] startConversation: API returned conv.id:", conv?.id);
-      } catch (err: any) {
-        const msg = err?.response?.data?.message ?? err?.message ?? "Failed to start conversation.";
-        console.error("[AppContext] startConversation: API FAILED —", msg, err);
-        throw new Error(msg); // ← MUST throw so UI can catch and show Alert
+  // ─── Mark Conversation As Read (Local State Update) ───────────────────────
+  // Updates local state immediately — does NOT call API (markMessagesRead handles that)
+  const markConversationAsRead = useCallback(
+  async (conversationId: string) => {
+    console.log("[AppContext] markConversationAsRead: marking conv as read:", conversationId);
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+      )
+    );
+    try {
+      const conv = conversations.find((c) => c.id === conversationId);
+      const lastMsgId = conv?.lastMessage?.id;
+      if (lastMsgId) {
+        await api.markMessagesRead(conversationId, lastMsgId);
       }
-      console.log("[AppContext] startConversation: refreshing conversations...");
-      await refreshConversations();
-      console.log("[AppContext] startConversation: done. conv.id =", conv.id);
-      return conv;
-    },
-    [refreshConversations],
-  );
+    } catch (error) {
+      console.error("[AppContext] markConversationAsRead: API call failed:", error);
+    }
+  },
+  [conversations]
+);
+
+  const startConversation = useCallback(
+  async (userId: string) => {
+    console.log("[AppContext] startConversation: calling API with userId:", userId);
+    let conv;
+    try {
+      conv = await api.createPrivateConversation(userId);
+      console.log("[AppContext] startConversation: API returned conv.id:", conv?.id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to start conversation.";
+      console.error("[AppContext] startConversation: API FAILED —", msg, err);
+      throw new Error(msg);
+    }
+    setConversations((prev) => {
+      const exists = prev.some((c) => c.id === conv.id);
+      if (exists) return prev;
+      return [conv, ...prev];
+    });
+    console.log("[AppContext] startConversation: done. conv.id =", conv.id);
+    return conv;
+  },
+  [],
+);
 
   // ─── Notifications ───────────────────────────────────────
   const refreshNotifications = useCallback(async () => {
@@ -844,12 +885,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setActiveConversation,
         setMessages,
         markMessagesRead,
+        markConversationAsRead,
         startConversation,
         notifications,
         unreadCount,
         refreshNotifications,
         markNotificationRead,
         markAllNotificationsRead,
+        isUserOnline: isOnline,
+        onlineSignalRConnected,
       }}
     >
       {children}

@@ -118,10 +118,9 @@ var apiService = builder.AddProject<Projects.UITVibes_Microservices_ApiService>(
     .WaitFor(postService)
     .WithReference(messageService)
     .WaitFor(messageService)
+    .WithReference(notificationService)
+    .WaitFor(notificationService)
     .WithEnvironment("Jwt__Key", jwtKey);
-
-
-
 
 
 

@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
 import * as api from "../../services/api";
 import { invokeHub } from "../../services/signalrService";
@@ -31,6 +32,7 @@ import { formatDistanceToNow } from "../../utils/time";
 
 export default function MessageScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     currentUser,
     conversations,
@@ -715,9 +717,14 @@ export default function MessageScreen() {
         {/* Message Input */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={88 + insets.bottom}
         >
-          <View style={styles.inputContainer}>
+          <View
+            style={[
+              styles.inputContainer,
+              { paddingBottom: Math.max(insets.bottom, 10) },
+            ]}
+          >
             <TouchableOpacity style={styles.attachBtn}>
               <Feather name="smile" size={22} color={AppColors.iconMuted} strokeWidth={2} />
             </TouchableOpacity>

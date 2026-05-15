@@ -207,15 +207,10 @@ export default function MessageScreen() {
         return;
       }
 
-      // 3. Set active conversation
-             // 3. Set active conversation
-      console.log("[MessageScreen] Setting activeConversation:", conv.id, conv.name ?? "private");
-      setActiveConversation(conv);
+      // 3. Navigate to chat screen (parent tab bar hidden automatically)
+      router.push(`/message/chat/${conv.id}`);
 
       // 4. Clear search state
-      setNewMsgSearch("");
-      setSearchResults([]);
-      // 5. Clear search state
       setNewMsgSearch("");
       setSearchResults([]);
 
@@ -316,12 +311,12 @@ export default function MessageScreen() {
   }, [setActiveConversation]);
 
   const handleConversationPress = useCallback(
-  async (conv: Conversation) => {
-    await markConversationAsRead(conv.id);
-    setActiveConversation(conv);
-  },
-  [setActiveConversation, markConversationAsRead]
-);
+    async (conv: Conversation) => {
+      await markConversationAsRead(conv.id);
+      router.push(`/message/chat/${conv.id}`);
+    },
+    [markConversationAsRead, router]
+  );
 
   // ─── Group Chat ────────────────────────────────────────────────────────────
   const { createGroupConversation, addMemberToGroup, removeMemberFromGroup, leaveGroup } =
@@ -609,206 +604,6 @@ export default function MessageScreen() {
     </View>
   );
 
-  // ─── Chat View ────────────────────────────────────────────────────────────
-  if (activeConversation) {
-    const other = getOtherMember(activeConversation);
-    const isGroup = activeConversation.isGroup;
-    const headerName = activeConversation.name || other?.displayName || "Chat";
-    const headerAvatar = other?.avatar || activeConversation.avatar;
-    const otherUser = !isGroup ? other : null;
-    const isAdmin =
-      activeConversation.adminIds?.includes(currentUser?.id ?? "") ?? false;
-
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        {/* Chat Header */}
-        <View style={styles.chatHeader}>
-          <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color={AppColors.text} strokeWidth={2} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.chatHeaderUser}
-            onPress={() => {
-              if (otherUser) {
-                setActiveConversation(null);
-                router.push(`/profile/${otherUser.id}` as any);
-              }
-            }}
-          >
-            {otherUser ? (
-              <Avatar
-                user={otherUser}
-                size="small"
-                showOnlineIndicator={true}
-                isOnline={isUserOnline(otherUser.id)}
-              />
-            ) : (
-              <View style={styles.chatAvatarGroup}>
-                <Feather name="users" size={18} color="white" />
-              </View>
-            )}
-            <View>
-              <Text style={styles.chatName} numberOfLines={1}>
-                {headerName}
-              </Text>
-              {isGroup && (
-                <Text style={styles.chatSubtitle}>
-                  {convMembers.length} members
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerAction}
-            onPress={() => setShowGroupSettings(isGroup && isAdmin)}
-          >
-            <Feather
-              name={isGroup && isAdmin ? "settings" : "info"}
-              size={22}
-              color={AppColors.text}
-              strokeWidth={2}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Messages */}
-        {isLoadingMessages ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={AppColors.primary} />
-            <Text style={styles.loadingText}>Loading messages...</Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderMessageBubble}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.messagesList}
-            showsVerticalScrollIndicator={false}
-            onScrollBeginDrag={() => { userScrolledUpRef.current = true; }}
-            onContentSizeChange={() => {
-              // If user hasn't scrolled up, keep at bottom on content size changes (e.g. keyboard)
-              if (!userScrolledUpRef.current) {
-                scrollToBottom(true);
-              }
-            }}
-            ListEmptyComponent={
-              <View style={styles.centerState}>
-                <Feather name="message-circle" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
-                <Text style={styles.emptyChatTitle}>No messages yet</Text>
-                <Text style={styles.emptyChatSubtitle}>
-                  Send the first message to start the conversation
-                </Text>
-              </View>
-            }
-            ListFooterComponent={<View ref={messagesEndRef} />}
-          />
-        )}
-
-        {/* Typing Indicator */}
-        {partnerTyping && (
-          <View style={styles.typingContainer}>
-            <Text style={styles.typingText}>
-              {otherUser ? otherUser.displayName : "Someone"} is typing...
-            </Text>
-          </View>
-        )}
-
-        {/* Message Input */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={88 + insets.bottom}
-        >
-          <View
-            style={[
-              styles.inputContainer,
-              { paddingBottom: Math.max(insets.bottom, 10) },
-            ]}
-          >
-            <TouchableOpacity style={styles.attachBtn}>
-              <Feather name="smile" size={22} color={AppColors.iconMuted} strokeWidth={2} />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.messageInput}
-              placeholder="Message..."
-              placeholderTextColor={AppColors.iconMuted}
-              value={messageText}
-              onChangeText={(text) => {
-                // Detect Enter without Shift → send immediately
-                if (!isSendingRef.current && text.endsWith('\n') && !text.endsWith('\n\n')) {
-                  const trimmed = text.trimEnd();
-                  setMessageText('');
-                  if (trimmed.length > 0) {
-                    handleSendDirect(trimmed);
-                  }
-                  return;
-                }
-                setMessageText(text);
-
-                // Debounce: notify partner that we're typing
-                if (activeConversation && text.length > 0) {
-                  if (!iStartedTypingRef.current) {
-                    iStartedTypingRef.current = true;
-                    invokeHub("StartTyping", activeConversation.id).catch(() => {});
-                  }
-                  if (typingTimeoutRef.current)
-                    clearTimeout(typingTimeoutRef.current);
-                  typingTimeoutRef.current = setTimeout(() => {
-                    iStartedTypingRef.current = false;
-                    invokeHub("StopTyping", activeConversation.id).catch(() => {});
-                  }, 2000);
-                }
-              }}
-              multiline
-              maxLength={4000}
-            />
-            {messageText.length > 0 ? (
-              <TouchableOpacity
-                onPress={handleSend}
-                style={styles.sendBtn}
-                disabled={isLoadingMessages}
-              >
-                <Feather name="send" size={22} color={AppColors.primary} strokeWidth={2} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.attachBtn}>
-                <Feather name="camera" size={22} color={AppColors.iconMuted} strokeWidth={2} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-
-        {/* ─── Group Settings Modal ─────────────────────────────────────── */}
-        {showGroupSettings && (
-          <GroupSettingsModal
-            conversation={activeConversation}
-            members={convMembers}
-            onClose={() => setShowGroupSettings(false)}
-            onRemoveMember={(member) => handleRemoveMember(member)}
-            onAddMember={() => setShowAddMember(true)}
-            onLeaveGroup={handleLeaveGroup}
-            isRemovingMember={isRemovingMember}
-            isAddingMember={isAddingMember}
-          />
-        )}
-
-        {/* ─── Add Member Sheet ──────────────────────────────────────────── */}
-        {showAddMember && (
-          <AddMemberSheet
-            conversation={activeConversation}
-            currentMembers={convMembers}
-            onClose={() => {
-              setShowAddMember(false);
-              setAddMemberSearch("");
-            }}
-            onAddMember={handleAddMember}
-            isAddingMember={isAddingMember}
-          />
-        )}
-      </SafeAreaView>
-    );
-  }
-
   // ─── Inbox View ───────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -907,7 +702,7 @@ export default function MessageScreen() {
             Alert.alert("Error", "Failed to refresh conversations.")
           )
         }
-        extraData={[filteredConversations, activeConversation]}
+        extraData={filteredConversations}
         ListHeaderComponent={
           isLoadingConversations && conversations.length === 0 ? (
             <>{[1, 2, 3, 4, 5].map((i) => <View key={i}>{renderLoadingItem()}</View>)}</>

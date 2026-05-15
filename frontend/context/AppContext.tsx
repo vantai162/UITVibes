@@ -342,6 +342,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Ref to store current conversationMembers without triggering effect re-runs
   const conversationMembersRef = useRef<Conversation["members"]>([]);
+  // Ref to track activeConversation for use in closures without stale values
+  const activeConversationRef = useRef<Conversation | null>(null);
+  activeConversationRef.current = activeConversation;
 
   // ─── Notifications ───────────────────────────────────────
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -633,7 +636,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (data.length > 0) {
         console.log("[AppContext] refreshConversations: first conv id:", data[0].id, "members:", data[0].members.length);
       }
-      setConversations(data);
+      // Merge server data with local unread counts to preserve optimistic updates from SignalR
+      setConversations((prev) => {
+        if (prev.length === 0) return data;
+        const localUnreadMap = new Map(prev.map((c) => [c.id, c.unreadCount ?? 0]));
+        return data.map((conv) => ({
+          ...conv,
+          unreadCount: localUnreadMap.has(conv.id)
+            ? localUnreadMap.get(conv.id)!
+            : conv.unreadCount,
+        }));
+      });
     } catch (error: any) {
       const msg = error?.response?.data?.message ?? "Failed to load conversations.";
       console.error("[AppContext] refreshConversations: FAILED —", msg, error);
@@ -938,7 +951,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         };
 
         // Only increment unreadCount when NOT the active conversation
-        const isActive = activeConversation?.id === messageConvId;
+        // Use ref to avoid stale closure
+        const isActive = activeConversationRef.current?.id === messageConvId;
         conv.unreadCount = isActive ? 0 : (conv.unreadCount ?? 0) + 1;
 
         // Move conversation to top
@@ -957,7 +971,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     return () => {
       connection.off("ReceiveMessage", convListHandler);
     };
-  }, [activeConversation]);
+  }, [currentUser]); // only re-register when currentUser changes (login/logout)
 
   // ─── Listen to SignalR UserTyping events ──────────────────
   useEffect(() => {

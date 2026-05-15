@@ -17,8 +17,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
 import * as api from "../../services/api";
+import { invokeHub } from "../../services/signalrService";
 import { Conversation, Message, User } from "../../data/mockData";
 import { AppColors, layoutPadding } from "../../constants/theme";
 import { Typography } from "../../constants/typography";
@@ -30,6 +32,7 @@ import { formatDistanceToNow } from "../../utils/time";
 
 export default function MessageScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     currentUser,
     conversations,
@@ -51,11 +54,11 @@ export default function MessageScreen() {
     fetchSuggestedUsers,
     isUserOnline,
     onlineSignalRConnected,
+    partnerTyping,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [messageText, setMessageText] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const isSendingRef = useRef(false);
   const [showNewMsg, setShowNewMsg] = useState(false);
   const [newMsgSearch, setNewMsgSearch] = useState("");
@@ -76,6 +79,7 @@ export default function MessageScreen() {
   const flatListRef = useRef<FlatList>(null);
   const messagesEndRef = useRef<View>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const iStartedTypingRef = useRef(false);
   const [convMembers, setConvMembers] = useState<Conversation["members"]>([]);
 
   // Load conversation list on mount
@@ -115,14 +119,43 @@ export default function MessageScreen() {
     }
   }, [activeConversation?.id]);
 
-  // Scroll to bottom when messages change — old messages go to top, new messages go to bottom
-  useEffect(() => {
-    if (messages.length > 0 && activeConversation) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 80);
+  // Track if user has scrolled up manually (to avoid fighting with auto-scroll on old-message loads)
+  const userScrolledUpRef = useRef(false);
+  // Track whether we've done the initial scroll for the current conversation
+  const initialScrollDoneRef = useRef(false);
+
+  // Scroll to bottom — only on initial load, or when at the bottom, or when a new message arrives
+  const scrollToBottom = useCallback((animated = true) => {
+    if (flatListRef.current) {
+      flatListRef.current.scrollToEnd({ animated });
     }
-  }, [messages.length, activeConversation?.id]);
+  }, []);
+
+  // Reset scroll state when conversation changes
+  useEffect(() => {
+    userScrolledUpRef.current = false;
+    initialScrollDoneRef.current = false;
+  }, [activeConversation?.id]);
+
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (messages.length > 0 && activeConversation && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      setTimeout(() => scrollToBottom(false), 100);
+    }
+  }, [activeConversation?.id, messages.length]); // intentionally on length change
+
+  // Scroll to bottom when a new message arrives (append at end) — but only if user is at bottom
+  useEffect(() => {
+    if (!activeConversation || messages.length === 0) return;
+
+    const lastMsg = messages[messages.length - 1];
+    // Triggered by: a new message was added (length increased and last item is fresh)
+    // We can't easily detect "append vs prepend" here, so we check if user is near bottom
+    if (!userScrolledUpRef.current) {
+      setTimeout(() => scrollToBottom(true), 80);
+    }
+  }, [messages.length]); // only on length change = new message appended
 
   // Debounced user search when typing in New Message sheet
   useEffect(() => {
@@ -240,7 +273,12 @@ export default function MessageScreen() {
         setMessageText(text); // restore on failure
       } finally {
         isSendingRef.current = false;
-        setIsTyping(false);
+        // Stop typing indicator — we just sent a message
+        if (iStartedTypingRef.current) {
+          iStartedTypingRef.current = false;
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          invokeHub("StopTyping", activeConversation.id).catch(() => {});
+        }
       }
     },
     [activeConversation, sendMessage],
@@ -250,7 +288,12 @@ export default function MessageScreen() {
     if (!messageText.trim()) return;
     const text = messageText.trim();
     setMessageText("");
-    setIsTyping(false);
+    // Stop typing indicator immediately
+    if (iStartedTypingRef.current) {
+      iStartedTypingRef.current = false;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      invokeHub("StopTyping", activeConversation.id).catch(() => {});
+    }
     try {
       if (!activeConversation) {
         Alert.alert("Error", "No conversation selected.");
@@ -642,6 +685,13 @@ export default function MessageScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => { userScrolledUpRef.current = true; }}
+            onContentSizeChange={() => {
+              // If user hasn't scrolled up, keep at bottom on content size changes (e.g. keyboard)
+              if (!userScrolledUpRef.current) {
+                scrollToBottom(true);
+              }
+            }}
             ListEmptyComponent={
               <View style={styles.centerState}>
                 <Feather name="message-circle" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
@@ -656,7 +706,7 @@ export default function MessageScreen() {
         )}
 
         {/* Typing Indicator */}
-        {isTyping && (
+        {partnerTyping && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>
               {otherUser ? otherUser.displayName : "Someone"} is typing...
@@ -667,9 +717,14 @@ export default function MessageScreen() {
         {/* Message Input */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={88 + insets.bottom}
         >
-          <View style={styles.inputContainer}>
+          <View
+            style={[
+              styles.inputContainer,
+              { paddingBottom: Math.max(insets.bottom, 10) },
+            ]}
+          >
             <TouchableOpacity style={styles.attachBtn}>
               <Feather name="smile" size={22} color={AppColors.iconMuted} strokeWidth={2} />
             </TouchableOpacity>
@@ -683,19 +738,24 @@ export default function MessageScreen() {
                 if (!isSendingRef.current && text.endsWith('\n') && !text.endsWith('\n\n')) {
                   const trimmed = text.trimEnd();
                   setMessageText('');
-                  // handleSend uses messageText from closure — call with the trimmed text directly
                   if (trimmed.length > 0) {
                     handleSendDirect(trimmed);
                   }
                   return;
                 }
                 setMessageText(text);
-                if (text.length > 0 && !isTyping) {
-                  setIsTyping(true);
+
+                // Debounce: notify partner that we're typing
+                if (activeConversation && text.length > 0) {
+                  if (!iStartedTypingRef.current) {
+                    iStartedTypingRef.current = true;
+                    invokeHub("StartTyping", activeConversation.id).catch(() => {});
+                  }
                   if (typingTimeoutRef.current)
                     clearTimeout(typingTimeoutRef.current);
                   typingTimeoutRef.current = setTimeout(() => {
-                    setIsTyping(false);
+                    iStartedTypingRef.current = false;
+                    invokeHub("StopTyping", activeConversation.id).catch(() => {});
                   }, 2000);
                 }
               }}

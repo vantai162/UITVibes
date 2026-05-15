@@ -103,12 +103,6 @@ export default function FollowersScreen() {
     );
 
     await toggleFollow(targetUserId);
-    const serverState = isFollowing(targetUserId);
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === targetUserId ? { ...u, isFollowing: serverState } : u,
-      ),
-    );
   };
 
   const renderItem = ({ item }: { item: User }) => (

@@ -231,14 +231,6 @@ export function ModernTabBar({
     return null;
   }
 
-  // Guard: hide tab bar on the message tab (inbox is covered by conversation view).
-  // When viewing a conversation inside the message tab, the inbox is replaced
-  // by the chat UI — no need for the tab bar here, same as Instagram/Messenger.
-  const activeRouteName = state.routes[state.index]?.name;
-  if (activeRouteName === 'message') {
-    return null;
-  }
-
   // Shared value: pixel positions of each tab center within the capsule.
   // Updated once after the capsule has been laid out.
   const positions = useSharedValue<number[]>([]);

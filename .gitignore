@@ -13,3 +13,7 @@
 /Backend/UITVibes-Microservices.AppHost/UITVibes-Microservices.AppHost.csproj.lscache
 /Backend/UITVibes-Microservices.ServiceDefaults/UITVibes-Microservices.ServiceDefaults.csproj.lscache
 /Backend/UserService/UserService.csproj.lscache
+Backend/MessageService/MessageService.csproj.lscache
+Backend/NotificationService/NotificationService.csproj.lscache
+Backend/PostService/PostService.csproj.lscache
+Backend/UserService/UserService.csproj.lscache

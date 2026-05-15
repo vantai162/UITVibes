@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useApp } from "../../context/AppContext";
 import { User, activeUserFollowingIds } from "../../data/mockData";
 import {
   getFollowers,
@@ -29,6 +30,7 @@ export default function FollowersScreen() {
     userId: string;
     tab?: string;
   }>();
+  const { currentUser } = useApp();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"followers" | "following">("followers");
@@ -50,7 +52,7 @@ export default function FollowersScreen() {
     const loadProfileInfo = async () => {
       const targetId = userId || "current";
       if (targetId === "current") {
-        setProfileDisplayName("myusername");
+        setProfileDisplayName(currentUser?.displayName || currentUser?.username || "Me");
         return;
       }
       try {

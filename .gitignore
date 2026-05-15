@@ -5,3 +5,11 @@
 /Backend/UITVibes-Microservices.AppHost/appsettings.json
 .github
 /.vs
+/Backend/AuthService/AuthService.csproj.lscache
+/Backend/MessageService/MessageService.csproj.lscache
+/Backend/NotificationService/NotificationService.csproj.lscache
+/Backend/PostService/PostService.csproj.lscache
+/Backend/UITVibes-Microservices.ApiService/UITVibes-Microservices.ApiService.csproj.lscache
+/Backend/UITVibes-Microservices.AppHost/UITVibes-Microservices.AppHost.csproj.lscache
+/Backend/UITVibes-Microservices.ServiceDefaults/UITVibes-Microservices.ServiceDefaults.csproj.lscache
+/Backend/UserService/UserService.csproj.lscache

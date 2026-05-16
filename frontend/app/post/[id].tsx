@@ -75,7 +75,8 @@ export default function PostDetailScreen() {
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const { toggleLike, addComment, currentUser } = useApp();
+  const { toggleLike, addComment, currentUser, toggleFollow } = useApp();
+  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -85,7 +86,10 @@ export default function PostDetailScreen() {
   const loadPost = async () => {
     setIsLoading(true);
     const data = await getPostById(id as string);
-    setPost(data || null);
+    if (data) {
+      setPost(data);
+      setIsFollowingAuthor(!!data.user.isFollowing);
+    }
     setIsLoading(false);
   };
 
@@ -102,6 +106,12 @@ export default function PostDetailScreen() {
           : null,
       );
     }
+  };
+
+  const handleFollowToggle = async () => {
+    if (!post) return;
+    setIsFollowingAuthor((prev) => !prev);
+    await toggleFollow(post.user.id);
   };
 
   // Recursively finds the comment with matching parentId at any nesting level
@@ -319,8 +329,13 @@ export default function PostDetailScreen() {
             <Text style={styles.userHandle}>@{post.user.username}</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.followButton}>
-          <Text style={styles.followButtonText}>Follow</Text>
+        <TouchableOpacity
+          style={[styles.followBtn, isFollowingAuthor && styles.followBtnFollowing]}
+          onPress={handleFollowToggle}
+        >
+          <Text style={[styles.followBtnText, isFollowingAuthor && styles.followBtnTextFollowing]}>
+            {isFollowingAuthor ? "Following" : "Follow"}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -480,16 +495,22 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
     marginTop: 2,
   },
-  followButton: {
+  followBtn: {
+    backgroundColor: AppColors.primary,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: AppColors.primary,
+    borderRadius: 8,
   },
-  followButtonText: {
-    color: AppColors.background,
+  followBtnFollowing: {
+    backgroundColor: AppColors.border,
+  },
+  followBtnText: {
+    color: "#FFFFFF",
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: 13,
+  },
+  followBtnTextFollowing: {
+    color: AppColors.text,
   },
   postImage: {
     width: "100%",

@@ -13,10 +13,8 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
@@ -24,23 +22,12 @@ import { Feather } from "@expo/vector-icons";
 import { getPostById, toggleCommentLike } from "../../services/postService";
 import { Post, Comment } from "../../data/mockData";
 import { Avatar, CommentItem } from "../../components";
+import { CommentContextMenu, DeleteConfirmModal } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { AppColors } from "../../constants/theme";
 import { SkeletonShimmer } from "../../components/SkeletonLoader";
-
-// ─── Animated avatar component for current user in comment input ────────────
-const CurrentUserAvatar = () => {
-  const { currentUser } = useApp();
-  return (
-    <View style={styles.inputAvatarWrap}>
-      {currentUser ? (
-        <Avatar user={currentUser} size="tiny" />
-      ) : (
-        <View style={styles.inputAvatarFallback} />
-      )}
-    </View>
-  );
-};
+import { updateComment, deleteComment } from "../../services/postService";
+import { CommentInput } from "../../components/CommentInput";
 
 // ─── Skeleton for initial load ────────────────────────────────────────────────
 const PostDetailSkeleton = () => (
@@ -83,11 +70,12 @@ const PostDetailSkeleton = () => (
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
   const [post, setPost] = useState<Post | null>(null);
-  const [commentText, setCommentText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
-  const { toggleLike, addComment } = useApp();
+  const [editingComment, setEditingComment] = useState<Comment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const { toggleLike, addComment, currentUser } = useApp();
   const router = useRouter();
 
   useEffect(() => {
@@ -134,13 +122,25 @@ export default function PostDetailScreen() {
     });
   };
 
-  const handleSendComment = async () => {
-    if (!post || !commentText.trim() || isSubmitting) return;
+  // Recursively removes the comment at any nesting level
+  const removeComment = (
+    comments: Comment[],
+    commentId: string,
+  ): Comment[] => {
+    return comments
+      .filter((c) => c.id !== commentId)
+      .map((c) => {
+        if (c.replies && c.replies.length > 0) {
+          return { ...c, replies: removeComment(c.replies, commentId) };
+        }
+        return c;
+      });
+  };
 
-    const text = commentText.trim();
+  const handleSendComment = async (text: string) => {
+    if (!post || !text.trim() || isSubmitting) return;
+
     setIsSubmitting(true);
-
-    setCommentText("");
 
     try {
       const newComment = await addComment(post.id, text, replyTo?.id);
@@ -165,7 +165,6 @@ export default function PostDetailScreen() {
         setReplyTo(null);
       }
     } catch (error) {
-      setCommentText(text);
       console.error("[PostDetail] Failed to submit comment:", error);
     } finally {
       setIsSubmitting(false);
@@ -185,6 +184,81 @@ export default function PostDetailScreen() {
       await toggleCommentLike(commentId);
     } catch (err) {
       console.error("[PostDetail] Failed to toggle comment like:", err);
+    }
+  };
+
+  const handleEditComment = (commentId: string) => {
+    const findComment = (comments: Comment[]): Comment | null => {
+      for (const c of comments) {
+        if (c.id === commentId) return c;
+        if (c.replies?.length) {
+          const found = findComment(c.replies);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const comment = findComment(post.comments);
+    if (comment) {
+      setEditingComment(comment);
+      setReplyTo(null);
+    }
+  };
+
+  const handleSubmitEdit = async (text: string) => {
+    if (!post || !editingComment || isSubmitting) return;
+    const savedText = editingComment.text;
+    setIsSubmitting(true);
+
+    const replaceComment = (comments: Comment[]): Comment[] =>
+      comments.map((c) => {
+        if (c.id === editingComment.id) return { ...c, text };
+        if (c.replies?.length) return { ...c, replies: replaceComment(c.replies) };
+        return c;
+      });
+
+    setPost((prev) =>
+      prev ? { ...prev, comments: replaceComment(prev.comments) } : prev,
+    );
+    setEditingComment(null);
+
+    try {
+      await updateComment(editingComment.id, text);
+    } catch (err) {
+      setPost((prev) =>
+        prev ? { ...prev, comments: replaceComment(prev.comments) } : prev,
+      );
+      console.error('[PostDetail] Failed to update comment:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingComment(null);
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    setDeleteTarget(commentId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!post || !deleteTarget) return;
+    const target = deleteTarget;
+    const prevComments = post.comments;
+    setDeleteTarget(null);
+
+    setPost((prev) =>
+      prev ? { ...prev, comments: removeComment(prev.comments, target) } : prev,
+    );
+
+    try {
+      await deleteComment(target);
+    } catch (err) {
+      setPost((prev) =>
+        prev ? { ...prev, comments: prevComments } : prev,
+      );
+      console.error('[PostDetail] Failed to delete comment:', err);
     }
   };
 
@@ -320,71 +394,34 @@ export default function PostDetailScreen() {
               comment={item}
               onReply={handleReply}
               onLike={handleCommentLike}
+              onEdit={handleEditComment}
+              onDelete={handleDeleteComment}
+              currentUserId={currentUser?.id}
             />
           )}
         />
-        <View style={styles.inputContainer}>
-          {replyTo && (
-            <View style={styles.replyBanner}>
-              <Feather
-                name="corner-down-left"
-                size={12}
-                color={AppColors.textMuted}
-              />
-              <Text style={styles.replyBannerText}>
-                Replying to{" "}
-                <Text style={styles.replyBannerUsername}>
-                  {replyTo.user.fullName || replyTo.user.displayName}
-                </Text>
-              </Text>
-              <TouchableOpacity
-                onPress={handleCancelReply}
-                style={styles.cancelReply}
-              >
-                <Feather name="x" size={14} color={AppColors.textMuted} />
-              </TouchableOpacity>
-            </View>
-          )}
-          <View style={styles.inputRow}>
-            <CurrentUserAvatar />
-            <TextInput
-              style={styles.input}
-              placeholder={
-                replyTo
-                  ? `Reply to ${replyTo.user.fullName || replyTo.user.displayName}...`
-                  : "Add a comment..."
-              }
-              placeholderTextColor={AppColors.iconMuted}
-              value={commentText}
-              onChangeText={setCommentText}
-              onSubmitEditing={handleSendComment}
-              blurOnSubmit={false}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {isSubmitting ? (
-              <View style={styles.sendIconWrap}>
-                <ActivityIndicator size="small" color={AppColors.primary} />
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={handleSendComment}
-                disabled={!commentText.trim() || isSubmitting}
-                style={styles.sendIconWrap}
-              >
-                <Feather
-                  name="send"
-                  size={20}
-                  color={
-                    commentText.trim() ? AppColors.primary : AppColors.iconMuted
-                  }
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        <CommentInput
+          editingComment={editingComment}
+          replyTo={replyTo}
+          onSubmit={(text) => {
+            if (editingComment) {
+              handleSubmitEdit(text);
+            } else {
+              handleSendComment(text);
+            }
+          }}
+          onCancelEdit={handleCancelEdit}
+          onCancelReply={handleCancelReply}
+          isSubmitting={isSubmitting}
+        />
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <DeleteConfirmModal
+        visible={deleteTarget !== null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </>
   );
 }
@@ -505,56 +542,6 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
     fontSize: 13,
     fontWeight: "600",
-  },
-  inputContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: AppColors.borderLight,
-    backgroundColor: AppColors.surface,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  replyBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    marginBottom: 8,
-    gap: 5,
-  },
-  replyBannerText: {
-    flex: 1,
-    fontSize: 12,
-    color: AppColors.textMuted,
-  },
-  replyBannerUsername: {
-    fontWeight: "600",
-    color: AppColors.text,
-  },
-  cancelReply: {
-    padding: 2,
-  },
-  inputAvatarWrap: {
-    marginRight: 10,
-  },
-  inputAvatarFallback: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: AppColors.borderLight,
-  },
-  input: {
-    flex: 1,
-    height: 36,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: AppColors.text,
-  },
-  sendIconWrap: {
-    padding: 6,
-    marginLeft: 4,
   },
 });
 

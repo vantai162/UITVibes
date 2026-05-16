@@ -21,17 +21,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 import { getPostById, toggleCommentLike } from "../../services/postService";
 import { Post, Comment } from "../../data/mockData";
 import { Avatar, CommentItem } from "../../components";
 import { useApp } from "../../context/AppContext";
 import { AppColors } from "../../constants/theme";
-import { SPRING_BOUNCE, SPRING_GENTLE } from "../../animations/spring";
 import { SkeletonShimmer } from "../../components/SkeletonLoader";
 
 // ─── Animated avatar component for current user in comment input ────────────
@@ -45,53 +39,6 @@ const CurrentUserAvatar = () => {
         <View style={styles.inputAvatarFallback} />
       )}
     </View>
-  );
-};
-
-// ─── Animated like button with spring bounce ──────────────────────────────────
-const LikeButton = ({
-  isLiked,
-  onPress,
-}: {
-  isLiked: boolean;
-  onPress: () => void;
-}) => {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.8, SPRING_GENTLE);
-  };
-  const handlePressOut = () => {
-    scale.value = withSpring(1.0, SPRING_GENTLE);
-  };
-  const handlePress = () => {
-    scale.value = withSpring(1.3, SPRING_BOUNCE, () => {
-      scale.value = withSpring(1.0, SPRING_BOUNCE);
-    });
-    onPress();
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <TouchableOpacity
-      onPress={handlePress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      activeOpacity={1}
-      style={styles.actionButton}
-    >
-      <Animated.View style={animatedStyle}>
-        <Feather
-          name="heart"
-          size={26}
-          color={isLiked ? AppColors.primary : AppColors.textMuted}
-          fill={isLiked ? AppColors.primary : "transparent"}
-        />
-      </Animated.View>
-    </TouchableOpacity>
   );
 };
 
@@ -306,40 +253,34 @@ export default function PostDetailScreen() {
       {/* Post Image */}
       <Image source={{ uri: post.image }} style={styles.postImage} />
 
-      {/* Engagement Actions */}
-      <View style={styles.actions}>
-        <LikeButton isLiked={post.isLiked} onPress={handleLike} />
-        <TouchableOpacity style={styles.actionButton}>
-          <Feather name="message-circle" size={24} color={AppColors.text} />
+      {/* Engagement Actions — single horizontal row */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity onPress={handleLike} style={styles.actionGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Feather
+            name="heart"
+            size={24}
+            color={post.isLiked ? AppColors.primary : AppColors.iconMuted}
+            fill={post.isLiked ? AppColors.primary : 'transparent'}
+            strokeWidth={2}
+          />
+          <Text style={styles.actionText}>{formatLikes(post.likes)} {post.likes === 1 ? 'Like' : 'Likes'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Feather name="share-2" size={24} color={AppColors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Feather name="bookmark" size={24} color={AppColors.text} />
-        </TouchableOpacity>
-      </View>
 
-      {/* Engagement Metrics */}
-      <View style={styles.engagementMetrics}>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricCount}>{formatLikes(post.likes)}</Text>
-          <Text style={styles.metricLabel}>Likes</Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricItem}>
-          <Text style={styles.metricCount}>
-            {formatLikes(post.comments?.length || post.commentsCount || 0)}
+        <TouchableOpacity style={styles.actionGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Feather name="message-circle" size={24} color={AppColors.iconMuted} strokeWidth={2} />
+          <Text style={styles.actionText}>
+            {post.comments?.length || post.commentsCount || 0} {(post.comments?.length || post.commentsCount || 0) === 1 ? 'Comment' : 'Comments'}
           </Text>
-          <Text style={styles.metricLabel}>Comments</Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricItem}>
-          <Text style={styles.metricCount}>
-            {formatLikes(post.shareCount || 0)}
-          </Text>
-          <Text style={styles.metricLabel}>Shares</Text>
-        </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Feather name="share-2" size={24} color={AppColors.iconMuted} strokeWidth={2} />
+          <Text style={styles.actionText}>{post.shareCount || 0} {(post.shareCount || 0) === 1 ? 'Share' : 'Shares'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.bookmarkGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Feather name="bookmark" size={24} color={AppColors.iconMuted} strokeWidth={2} />
+        </TouchableOpacity>
       </View>
 
       {/* Caption */}
@@ -517,54 +458,27 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 1,
   },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: 14,
+    gap: 20,
   },
-  actionButton: {
-    padding: 4,
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
-  engagementMetrics: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: AppColors.border,
-    backgroundColor: AppColors.surface,
+  bookmarkGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
   },
-  metricItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  metricCount: {
-    fontWeight: "700",
-    fontSize: 18,
-    color: AppColors.text,
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: AppColors.textSecondary,
-    marginTop: 2,
-  },
-  metricDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: AppColors.border,
-  },
-  likesContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-  },
-  likes: {
-    fontWeight: "600",
-    fontSize: 14,
-    color: AppColors.text,
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.iconMuted,
   },
   captionContainer: {
     paddingHorizontal: 16,

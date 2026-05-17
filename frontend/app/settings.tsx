@@ -324,18 +324,18 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="info"
             label="Help Center"
-            onPress={() => {}}
+            onPress={() => settingsRouter.push('/help' as any)}
             isFirst
           />
           <SettingsRow
             icon="file-text"
             label="Terms of Service"
-            onPress={() => {}}
+            onPress={() => settingsRouter.push('/terms' as any)}
           />
           <SettingsRow
             icon="shield"
             label="Privacy Policy"
-            onPress={() => {}}
+            onPress={() => settingsRouter.push('/privacy' as any)}
             isLast
           />
         </SettingsSection>

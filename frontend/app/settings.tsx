@@ -255,6 +255,11 @@ export default function SettingsScreen() {
             onPress={() => {}}
           />
           <SettingsRow
+            icon="user-x"
+            label="Blocked Accounts"
+            onPress={() => settingsRouter.push('/blocked-accounts' as any)}
+          />
+          <SettingsRow
             icon="key"
             label="Private Account"
             isToggle

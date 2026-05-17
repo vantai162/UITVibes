@@ -52,6 +52,7 @@ function RootLayoutNav() {
         <Stack.Screen name="story/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="blocked-accounts" options={{ headerShown: false }} />
         <Stack.Screen name="help" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ headerShown: false }} />
         <Stack.Screen name="privacy" options={{ headerShown: false }} />

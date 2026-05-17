@@ -7,8 +7,11 @@ import { getUserById, getUserPosts, getUserStories, toggleFollow, type Story } f
 import { getCurrentUserId } from '../../services/session';
 import { User, Post } from '../../data/mockData';
 import { Avatar, PostGrid, StoryGrid } from '../../components';
-import { AppColors, layoutPadding } from '../../constants/theme';
+import { AppColors, layoutPadding, borderRadius } from '../../constants/theme';
+import { Typography } from '../../constants/typography';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { UserActionsSheet } from '../../components/profile/UserActionsSheet';
+import { blockUser } from '../../services/blockService';
 import defaultAvatar from '../../assets/images/default-avatar.png';
 
 export default function UserProfileScreen() {
@@ -18,6 +21,7 @@ export default function UserProfileScreen() {
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profileTab, setProfileTab] = useState<'posts' | 'stories'>('posts');
+  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -70,6 +74,22 @@ export default function UserProfileScreen() {
     router.push('/(tabs)/message' as any);
   };
 
+  const handleBlockUser = async () => {
+    if (!user) return;
+    console.log('[handleBlockUser] currentUserId:', getCurrentUserId(), 'blockedId:', user.id);
+    try {
+      await blockUser(user.id);
+      router.back();
+    } catch (err) {
+      console.error('[handleBlockUser] error:', err);
+    }
+  };
+
+  const handleReportUser = () => {
+    // TODO: implement actual report submission
+    console.log('[Report] user:', user.id);
+  };
+
   const formatCount = (count: number | undefined | null): string => {
     const n = Number(count) || 0;
     if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -79,7 +99,7 @@ export default function UserProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
         <ActivityIndicator size="large" color={AppColors.primary} />
       </SafeAreaView>
     );
@@ -87,16 +107,33 @@ export default function UserProfileScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text>User not found</Text>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Profile" onBack={() => router.back()} />
+        <View style={styles.notFoundContainer}>
+          <Feather name="user-x" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
+          <Text style={styles.notFoundText}>User not found</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
     <>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScreenHeader title={user.username} onBack={() => router.back()} />
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <ScreenHeader
+          title={user.username}
+          onBack={() => router.back()}
+          rightAction={
+            <TouchableOpacity
+              style={styles.moreBtn}
+              activeOpacity={0.7}
+              onPress={() => setActionsSheetVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="more-horizontal" size={22} color={AppColors.text} strokeWidth={2.5} />
+            </TouchableOpacity>
+          }
+        />
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.profileInfo}>
             <Avatar user={user} size="large" />
@@ -198,6 +235,14 @@ export default function UserProfileScreen() {
             <StoryGrid stories={stories} isCurrentUser={false} />
           )}
         </ScrollView>
+
+        <UserActionsSheet
+          visible={actionsSheetVisible}
+          onClose={() => setActionsSheetVisible(false)}
+          onBlock={handleBlockUser}
+          onReport={handleReportUser}
+          blockedUsername={user.username}
+        />
       </SafeAreaView>
     </>
   );
@@ -207,6 +252,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppColors.background,
+  },
+  moreBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.sm + 2,
+    backgroundColor: AppColors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -351,5 +404,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: AppColors.textMuted,
+  },
+  notFoundContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  notFoundText: {
+    ...Typography.sectionTitle,
+    color: AppColors.iconMuted,
   },
 });

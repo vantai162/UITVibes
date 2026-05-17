@@ -22,6 +22,11 @@ export interface BlockListDto {
   bio: string;
 }
 
+export interface BlockStatusDto {
+  blockedByMe: boolean;
+  blockedMe: boolean;
+}
+
 /** Normalize raw API response to frontend BlockListDto — handles camelCase and PascalCase */
 function normalizeBlockListItem(raw: Record<string, unknown>): BlockListDto {
   const blockedId =
@@ -89,4 +94,21 @@ export async function checkIsBlocked(blockedId: string): Promise<boolean> {
     `/user/block/${blockedId}/is-blocked`,
   );
   return res.data.isBlocked;
+}
+
+/** GET /user/block/{userId}/status */
+export async function getBlockStatus(userId: string): Promise<BlockStatusDto> {
+  const res = await apiClient.get<Record<string, unknown>>(
+    `/user/block/${userId}/status`,
+  );
+  const data = res.data as {
+    blockedByMe?: boolean;
+    blockedMe?: boolean;
+    BlockedByMe?: boolean;
+    BlockedMe?: boolean;
+  };
+  return {
+    blockedByMe: data.blockedByMe ?? data.BlockedByMe ?? false,
+    blockedMe: data.blockedMe ?? data.BlockedMe ?? false,
+  };
 }

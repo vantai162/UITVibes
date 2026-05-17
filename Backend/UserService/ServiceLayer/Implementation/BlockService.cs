@@ -109,6 +109,25 @@ namespace UserService.ServiceLayer.Implementation
             return block != null;
         }
 
+        public async Task<BlockStatusDto> GetBlockStatusAsync(Guid currentUserId, Guid otherUserId)
+        {
+            if (currentUserId == otherUserId)
+            {
+                return new BlockStatusDto { BlockedByMe = false, BlockedMe = false };
+            }
+
+            var blockedByMe = await _context.Blocks
+                .AnyAsync(b => b.BlockerId == currentUserId && b.BlockedId == otherUserId);
+            var blockedMe = await _context.Blocks
+                .AnyAsync(b => b.BlockerId == otherUserId && b.BlockedId == currentUserId);
+
+            return new BlockStatusDto
+            {
+                BlockedByMe = blockedByMe,
+                BlockedMe = blockedMe
+            };
+        }
+
         public async Task UnblockUserAsync(Guid blockerId, Guid blockedId)
         {
             if (blockerId == blockedId)

@@ -11,7 +11,7 @@ import { AppColors, layoutPadding, borderRadius } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { UserActionsSheet } from '../../components/profile/UserActionsSheet';
-import { blockUser } from '../../services/blockService';
+import { blockUser, getBlockStatus, type BlockStatusDto } from '../../services/blockService';
 import defaultAvatar from '../../assets/images/default-avatar.png';
 
 export default function UserProfileScreen() {
@@ -20,6 +20,7 @@ export default function UserProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [blockStatus, setBlockStatus] = useState<BlockStatusDto | null>(null);
   const [profileTab, setProfileTab] = useState<'posts' | 'stories'>('posts');
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const router = useRouter();
@@ -32,10 +33,24 @@ export default function UserProfileScreen() {
   const loadUserData = async () => {
     setIsLoading(true);
     try {
+      const targetId = id as string;
+      const currentUserId = getCurrentUserId();
+      setBlockStatus(null);
+      if (targetId && currentUserId && targetId !== currentUserId) {
+        const status = await getBlockStatus(targetId);
+        setBlockStatus(status);
+        if (status.blockedByMe || status.blockedMe) {
+          setUser(null);
+          setPosts([]);
+          setStories([]);
+          return;
+        }
+      }
+
       const [userData, userPosts, userStories] = await Promise.all([
-        getUserById(id as string),
-        getUserPosts(id as string),
-        getUserStories(id as string),
+        getUserById(targetId),
+        getUserPosts(targetId),
+        getUserStories(targetId),
       ]);
       setUser(userData || null);
       setPosts(userPosts);
@@ -77,12 +92,11 @@ export default function UserProfileScreen() {
   const handleBlockUser = async () => {
     if (!user) return;
     console.log('[handleBlockUser] currentUserId:', getCurrentUserId(), 'blockedId:', user.id);
-    try {
-      await blockUser(user.id);
-      router.back();
-    } catch (err) {
-      console.error('[handleBlockUser] error:', err);
-    }
+    await blockUser(user.id);
+    setBlockStatus({ blockedByMe: true, blockedMe: false });
+    setUser(null);
+    setPosts([]);
+    setStories([]);
   };
 
   const handleReportUser = () => {
@@ -106,6 +120,22 @@ export default function UserProfileScreen() {
   }
 
   if (!user) {
+    const isBlocked = !!(blockStatus?.blockedByMe || blockStatus?.blockedMe);
+    if (isBlocked) {
+      return (
+        <SafeAreaView style={styles.container} edges={['top']}>
+          <ScreenHeader title="Profile" onBack={() => router.back()} />
+          <View style={styles.blockedContainer}>
+            <Feather name="slash" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
+            <Text style={styles.blockedTitle}>Profile unavailable</Text>
+            <Text style={styles.blockedText}>
+              You cannot view this profile.
+            </Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title="Profile" onBack={() => router.back()} />
@@ -414,5 +444,22 @@ const styles = StyleSheet.create({
   notFoundText: {
     ...Typography.sectionTitle,
     color: AppColors.iconMuted,
+  },
+  blockedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: layoutPadding + 20,
+  },
+  blockedTitle: {
+    ...Typography.sectionTitle,
+    color: AppColors.text,
+    marginTop: 12,
+  },
+  blockedText: {
+    ...Typography.body,
+    color: AppColors.textMuted,
+    marginTop: 6,
+    textAlign: 'center',
   },
 });

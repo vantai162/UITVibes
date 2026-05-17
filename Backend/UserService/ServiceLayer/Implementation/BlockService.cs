@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UserService.DTOs;
 using UserService.Models;
 using UserService.ServiceLayer.Interface;
@@ -96,6 +96,7 @@ namespace UserService.ServiceLayer.Implementation
                         BlockedUserId = block.BlockedId,
                         DisplayName = user.DisplayName,
                         AvatarUrl = user.AvatarUrl,
+                        Bio = user.Bio,
                         BlockedAt = block.CreatedAt
                     }).ToListAsync();
             return blockedUsers;

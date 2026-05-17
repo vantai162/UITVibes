@@ -10,6 +10,8 @@ export { ScreenHeader } from './ScreenHeader';
 export { EmptyPostsState } from './EmptyPostsState';
 export { Toast } from './Toast';
 export { default as EditProfileModal } from './EditProfileModal';
+export { PrivacySection } from './privacy/PrivacySection';
+export { HighlightCard } from './privacy/HighlightCard';
 export { CommentContextMenu } from './CommentContextMenu';
 export { DeleteConfirmModal } from './DeleteConfirmModal';
 // Animation components

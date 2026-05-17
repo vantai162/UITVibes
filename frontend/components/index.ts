@@ -6,6 +6,7 @@ export { StoryBar } from './StoryBar';
 export { CommentItem } from './CommentItem';
 export { PostGrid, UserListItem, StoryGrid } from './Lists';
 export { Header } from './Header';
+export { ScreenHeader } from './ScreenHeader';
 export { EmptyPostsState } from './EmptyPostsState';
 export { Toast } from './Toast';
 export { default as EditProfileModal } from './EditProfileModal';

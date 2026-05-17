@@ -8,6 +8,7 @@ import { getCurrentUserId } from '../../services/session';
 import { User, Post } from '../../data/mockData';
 import { Avatar, PostGrid, StoryGrid } from '../../components';
 import { AppColors, layoutPadding } from '../../constants/theme';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import defaultAvatar from '../../assets/images/default-avatar.png';
 
 export default function UserProfileScreen() {
@@ -94,15 +95,8 @@ export default function UserProfileScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: user.username,
-          headerBackTitle: 'Back',
-          headerTintColor: AppColors.primary,
-        }}
-      />
       <SafeAreaView style={styles.container} edges={['bottom']}>
+        <ScreenHeader title={user.username} onBack={() => router.back()} />
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.profileInfo}>
             <Avatar user={user} size="large" />

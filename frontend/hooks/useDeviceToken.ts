@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Platform, Alert } from "react-native";
-import * as Notifications from "expo-notifications";
+import messaging from "@react-native-firebase/messaging";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   registerDeviceToken,
@@ -52,8 +52,7 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
     "granted" | "denied" | "undetermined" | null
   >(null);
   const [isLoading, setIsLoading] = useState(false);
-  const notificationSubscriptionRef =
-    useRef<Notifications.EventSubscription | null>(null);
+  const unsubscribeTokenRefreshRef = useRef<(() => void) | null>(null);
 
   /**
    * Request notification permission from OS
@@ -61,16 +60,12 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
   const requestPermission = async () => {
     try {
       setIsLoading(true);
-      const { status } = await Notifications.requestPermissionsAsync({
-        ios: {
-          allowAlert: true,
-          allowBadge: true,
-          allowSound: true,
-          allowAnnouncements: true,
-        },
-      });
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-      if (status === "granted") {
+      if (enabled) {
         setPermissionStatus("granted");
         onPermissionGranted?.();
         if (__DEV__) {
@@ -101,8 +96,8 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
    */
   const getToken = async (): Promise<string | null> => {
     try {
-      const token = await Notifications.getExpoPushTokenAsync();
-      return token.data;
+      const token = await messaging().getToken();
+      return token;
     } catch (error) {
       console.error("[Device Token] Failed to get token:", error);
       onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -169,19 +164,19 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
    * Listen for token refresh events
    */
   const setupTokenRefreshListener = () => {
-    if (notificationSubscriptionRef.current) {
-      notificationSubscriptionRef.current.remove();
+    if (unsubscribeTokenRefreshRef.current) {
+      unsubscribeTokenRefreshRef.current();
     }
 
-    // Expo notifications token refresh
-    notificationSubscriptionRef.current =
-      Notifications.addNotificationResponseReceivedListener(
-        async (response) => {
-          if (__DEV__) {
-            console.log("[Device Token] Notification response:", response);
-          }
-        },
-      );
+    // FCM Token refresh listener
+    unsubscribeTokenRefreshRef.current = messaging().onTokenRefresh(async (newToken) => {
+      if (__DEV__) {
+        console.log("[Device Token] Token refreshed:", newToken.substring(0, 20) + "...");
+      }
+      setDeviceToken(newToken);
+      await AsyncStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, newToken);
+      await registerDeviceToken(newToken, DEVICE_PLATFORM);
+    });
   };
 
   /**
@@ -196,9 +191,9 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
       setIsRegistered(false);
       await AsyncStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY);
 
-      if (notificationSubscriptionRef.current) {
-        notificationSubscriptionRef.current.remove();
-        notificationSubscriptionRef.current = null;
+      if (unsubscribeTokenRefreshRef.current) {
+        unsubscribeTokenRefreshRef.current();
+        unsubscribeTokenRefreshRef.current = null;
       }
 
       if (__DEV__) {
@@ -244,8 +239,8 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
     initialize();
 
     return () => {
-      if (notificationSubscriptionRef.current) {
-        notificationSubscriptionRef.current.remove();
+      if (unsubscribeTokenRefreshRef.current) {
+        unsubscribeTokenRefreshRef.current();
       }
     };
   }, [autoRegister, autoRequestPermission]);

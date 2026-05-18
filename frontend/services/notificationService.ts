@@ -7,7 +7,7 @@
  * GET /api/notification/unread-count
  */
 
-import { httpClient, API_BASE_URL } from "./httpClient";
+import apiClient from "./httpClient";
 import type {
   NotificationDto,
   PagedResult,
@@ -24,8 +24,8 @@ export async function getNotifications(
   pageSize: number = 20,
 ): Promise<Notification[]> {
   try {
-    const response = await httpClient.get<PagedResult<NotificationDto>>(
-      `${API_BASE_URL}/api/notification`,
+    const response = await apiClient.get<PagedResult<NotificationDto>>(
+      "/notification",
       {
         params: { page, pageSize },
       },
@@ -48,8 +48,8 @@ export async function markNotificationRead(
   notificationId: string,
 ): Promise<void> {
   try {
-    await httpClient.put(
-      `${API_BASE_URL}/api/notification/${notificationId}/read`,
+    await apiClient.put(
+      `/notification/${notificationId}/read`,
     );
 
     if (__DEV__) {
@@ -67,7 +67,7 @@ export async function markNotificationRead(
  */
 export async function markAllNotificationsRead(): Promise<void> {
   try {
-    await httpClient.put(`${API_BASE_URL}/api/notification/read-all`);
+    await apiClient.put(`/notification/read-all`);
 
     if (__DEV__) {
       console.log("[Notification] Marked all as read");
@@ -84,8 +84,8 @@ export async function markAllNotificationsRead(): Promise<void> {
  */
 export async function getUnreadNotificationCount(): Promise<number> {
   try {
-    const response = await httpClient.get<UnreadCountResponse>(
-      `${API_BASE_URL}/api/notification/unread-count`,
+    const response = await apiClient.get<UnreadCountResponse>(
+      `/notification/unread-count`,
     );
 
     return response.data.unreadCount || 0;

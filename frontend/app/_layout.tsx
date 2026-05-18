@@ -8,6 +8,13 @@ import { useEffect } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { AppColors } from '@/constants/theme';
+import messaging from '@react-native-firebase/messaging';
+import { handleNotificationTap } from '@/utils/notificationRouter';
+
+// MUST be outside component — called when app is in background/killed
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  console.log('[FCM Background] Message:', remoteMessage.data);
+});
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -18,6 +25,23 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useApp();
   const segments = useSegments();
   const router = useRouter();
+
+  // Notification tap: app was in background, user tapped notification
+  useEffect(() => {
+    const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
+      handleNotificationTap(remoteMessage.data, router);
+    });
+    return unsubscribe;
+  }, [router]);
+
+  // Notification tap: app was killed, user tapped notification to open it
+  useEffect(() => {
+    messaging().getInitialNotification().then((remoteMessage) => {
+      if (remoteMessage) {
+        handleNotificationTap(remoteMessage.data, router);
+      }
+    });
+  }, [router]);
 
   useEffect(() => {
     if (isLoading) return;

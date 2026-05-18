@@ -4,7 +4,7 @@
  * Called from useDeviceToken() hook.
  */
 
-import { httpClient, API_BASE_URL } from "./httpClient";
+import apiClient from "./httpClient";
 import type { RegisterDeviceTokenRequest } from "../data/notification.d";
 
 /**
@@ -21,8 +21,8 @@ export async function registerDeviceToken(
       platform,
     };
 
-    const response = await httpClient.post(
-      `${API_BASE_URL}/api/device/register`,
+    const response = await apiClient.post(
+      `/notification/device/register`,
       payload,
     );
 
@@ -48,7 +48,7 @@ export async function registerDeviceToken(
 export async function revokeDeviceToken(token: string): Promise<void> {
   try {
     // This endpoint may not exist yet; implement if backend adds it
-    // await httpClient.post(`${API_BASE_URL}/api/device/revoke`, { token });
+    // await apiClient.post(`/notification/device/revoke`, { token });
     if (__DEV__) {
       console.log(
         `[Device Token] Token revoked locally: ${token.substring(0, 20)}...`,

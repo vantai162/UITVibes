@@ -17,6 +17,7 @@ import {
 import * as api from "../services/api";
 import type { Story } from "../services/storyService";
 import { useOnlineUsers } from "../hooks/useOnlineUsers";
+import messaging from "@react-native-firebase/messaging";
 import { useDeviceToken } from "../hooks/useDeviceToken";
 import { getConnection } from "../services/signalrService";
 import type { BE_MessageResponse } from "../services/backendTypes";
@@ -934,6 +935,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // ─── Foreground Notification Listener ────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
+      console.log("[FCM Foreground]", remoteMessage.data);
+      // Increment badge count immediately
+      setUnreadCount((prev) => prev + 1);
+      // Refresh the full list to ensure the notification feed is up-to-date
+      await refreshNotifications();
+    });
+
+    return unsubscribe;
+  }, [isAuthenticated, refreshNotifications]);
+
   // ─── Init: thử restore session từ JWT đã lưu ─────────────
   useEffect(() => {
     const initializeData = async () => {
@@ -1227,3 +1243,4 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     </AppContext.Provider>
   );
 };
+ 

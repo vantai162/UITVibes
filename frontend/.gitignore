@@ -40,3 +40,8 @@ yarn-error.*
 app-example
 
 # generated native folders
+
+# firebase 
+google-services.json
+GoogleService-Info.plist
+

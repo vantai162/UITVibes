@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import { Platform } from 'react-native';
 import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -12,9 +13,11 @@ import messaging from '@react-native-firebase/messaging';
 import { handleNotificationTap } from '@/utils/notificationRouter';
 
 // MUST be outside component — called when app is in background/killed
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  console.log('[FCM Background] Message:', remoteMessage.data);
-});
+if (Platform.OS !== 'web') {
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    console.log('[FCM Background] Message:', remoteMessage.data);
+  });
+}
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -28,6 +31,7 @@ function RootLayoutNav() {
 
   // Notification tap: app was in background, user tapped notification
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
       handleNotificationTap(remoteMessage.data, router);
     });
@@ -36,6 +40,7 @@ function RootLayoutNav() {
 
   // Notification tap: app was killed, user tapped notification to open it
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     messaging().getInitialNotification().then((remoteMessage) => {
       if (remoteMessage) {
         handleNotificationTap(remoteMessage.data, router);

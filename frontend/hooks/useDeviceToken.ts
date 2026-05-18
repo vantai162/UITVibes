@@ -59,6 +59,7 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
    */
   const requestPermission = async () => {
     try {
+      if (Platform.OS === 'web') return false;
       setIsLoading(true);
       const authStatus = await messaging().requestPermission();
       const enabled =
@@ -96,6 +97,7 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
    */
   const getToken = async (): Promise<string | null> => {
     try {
+      if (Platform.OS === 'web') return null;
       const token = await messaging().getToken();
       return token;
     } catch (error) {
@@ -164,6 +166,8 @@ export function useDeviceToken(options: UseDeviceTokenOptions = {}) {
    * Listen for token refresh events
    */
   const setupTokenRefreshListener = () => {
+    if (Platform.OS === 'web') return;
+    
     if (unsubscribeTokenRefreshRef.current) {
       unsubscribeTokenRefreshRef.current();
     }

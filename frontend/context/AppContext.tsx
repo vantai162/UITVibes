@@ -7,6 +7,7 @@ import React, {
   ReactNode,
   useRef,
 } from "react";
+import { Platform } from "react-native";
 import {
   User,
   Post,
@@ -937,7 +938,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // ─── Foreground Notification Listener ────────────────────
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || Platform.OS === 'web') return;
 
     const unsubscribe = messaging().onMessage(async (remoteMessage) => {
       console.log("[FCM Foreground]", remoteMessage.data);

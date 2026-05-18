@@ -11,6 +11,16 @@ export interface BE_LoginRequest {
   password: string;
 }
 
+export interface BE_ForgotPasswordRequest {
+  email: string;
+}
+
+export interface BE_ResetPasswordRequest {
+  email: string;
+  otpCode: string;
+  newPassword: string;
+}
+
 export interface BE_AuthResponse {
   accessToken: string;
   refreshToken: string;

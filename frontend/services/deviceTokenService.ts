@@ -18,7 +18,7 @@ export async function registerDeviceToken(
   try {
     const payload: RegisterDeviceTokenRequest = {
       token,
-      platform,
+      platform: platform === "Android" ? 0 : 1, // Backend expects integer enum (0 = Android, 1 = iOS)
     };
 
     const response = await apiClient.post(

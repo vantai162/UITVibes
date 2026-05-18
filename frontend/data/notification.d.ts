@@ -7,7 +7,7 @@ export type DevicePlatform = "Android" | "iOS";
 
 export interface RegisterDeviceTokenRequest {
   token: string;
-  platform: DevicePlatform;
+  platform: 0 | 1; // 0 for Android, 1 for iOS
 }
 
 export interface NotificationDto {

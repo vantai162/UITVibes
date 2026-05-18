@@ -134,6 +134,7 @@ export interface BE_PostResponse {
   commentsCount: number;
   sharesCount: number;
   viewsCount: number;
+  repostCount: number;
   createdAt: string;
   updatedAt: string;
   media: Array<{
@@ -149,6 +150,7 @@ export interface BE_PostResponse {
   hashtags: string[];
   isLikedByCurrentUser: boolean;
   isBookmarkedByCurrentUser: boolean;
+  isRepostedByCurrentUser: boolean;
   originalPost: BE_PostResponse | null;
 }
 
@@ -249,6 +251,19 @@ export interface CreatePostBody {
     width?: number;
     height?: number;
   }>;
+}
+
+export interface BE_RepostResponse {
+  repostId: string;
+  originalPostId: string;
+  userId: string;
+  totalReposts: number;
+  createdAt: string;
+}
+
+export interface BE_RepostStatusResponse {
+  postId: string;
+  hasReposted: boolean;
 }
 
 // ============ STORY TYPES ============

@@ -11,10 +11,12 @@ import {
   clearLocalHandle,
   clearPersistedAvatarUrl,
   clearUserCache,
+  clearCurrentUserEmail,
   getCurrentUser,
   mergePersistedAvatarIfMissing,
   setCurrentAccount,
   setCurrentUser,
+  setCurrentUserEmail,
   setCurrentUserId,
   writeLocalHandle,
 } from "./session";
@@ -106,6 +108,7 @@ export async function login(email: string, password: string): Promise<User> {
 
     setCurrentUserId(data.user.id);
     setCurrentUser(user);
+    await setCurrentUserEmail(data.user.email ?? email);
     if (user.username) void writeLocalHandle(user.id, user.username);
     return user;
   } catch (error: any) {
@@ -158,6 +161,7 @@ export async function register(
 
     setCurrentUserId(data.user.id);
     setCurrentUser(user);
+    await setCurrentUserEmail(data.user.email ?? email);
     if (user.username) void writeLocalHandle(user.id, user.username);
     return user;
   } catch (error: any) {
@@ -177,6 +181,7 @@ async function clearLocalAuthState(): Promise<void> {
   clearUserCache();
   await clearTokens();
   await clearLocalHandle();
+  await clearCurrentUserEmail();
   setCurrentUserId("current");
   setCurrentUser(null);
   setCurrentAccount("activeUser");
@@ -363,3 +368,36 @@ export async function resetPassword(
     throw new Error(message);
   }
 }
+
+// ─── Change Password (logged-in) ─────────────────────────────────────────────
+
+export async function sendChangePasswordOtp(
+  oldPassword: string,
+): Promise<void> {
+  const trimmed = (oldPassword ?? "").trim();
+  if (!trimmed) {
+    throw new Error("Current password is required");
+  }
+  if (trimmed.length < 6) {
+    throw new Error("Current password must be at least 6 characters");
+  }
+  try {
+    await apiClient.post("/auth/auth/change-password/send-otp", {
+      oldPassword: trimmed,
+    });
+  } catch (error: any) {
+    console.error(
+      "[Auth] sendChangePasswordOtp failed",
+      error?.response?.data ?? error,
+    );
+    const message =
+      (error?.response?.data &&
+        (error.response.data.message || error.response.data.error)) ||
+      error?.message ||
+      "Failed to send OTP. Please try again.";
+    throw new Error(message);
+  }
+}
+
+
+

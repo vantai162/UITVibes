@@ -77,8 +77,12 @@ interface AppContextType {
   toggleLike: (postId: string) => Promise<void>;
   toggleBookmark: (postId: string) => Promise<void>;
   toggleRepost: (postId: string) => Promise<void>;
-  repostedPosts: Post[];           // Danh sách repost của user hiện tại
-  addComment: (postId: string, text: string, parentCommentId?: string) => Promise<void>;
+  repostedPosts: Post[]; // Danh sách repost của user hiện tại
+  addComment: (
+    postId: string,
+    text: string,
+    parentCommentId?: string,
+  ) => Promise<void>;
   deleteComment: (postId: string, commentId: string) => Promise<void>;
   createPost: (
     image: string,
@@ -504,7 +508,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             return {
               ...post,
               isReposted: willRepost,
-              repostCount: Math.max(0, (post.repostCount ?? 0) + (willRepost ? 1 : -1)),
+              repostCount: Math.max(
+                0,
+                (post.repostCount ?? 0) + (willRepost ? 1 : -1),
+              ),
             };
           }
           return post;
@@ -522,7 +529,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setRepostedPosts((prev) => {
           const exists = prev.some((p) => p.id === postId);
           if (exists) return prev;
-          return [{ ...targetPost, isReposted: true, repostCount: (targetPost.repostCount ?? 0) + 1 }, ...prev];
+          return [
+            {
+              ...targetPost,
+              isReposted: true,
+              repostCount: (targetPost.repostCount ?? 0) + 1,
+            },
+            ...prev,
+          ];
         });
       } else {
         // Xóa khỏi danh sách repost (local)
@@ -531,7 +545,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     },
     [posts],
   );
-
 
   const addComment = useCallback(
     async (postId: string, text: string, parentCommentId?: string) => {
@@ -973,9 +986,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    refreshNotifications();
+  }, [isAuthenticated, refreshNotifications]);
+
   // ─── Foreground Notification Listener ────────────────────
   useEffect(() => {
-    if (!isAuthenticated || Platform.OS === 'web') return;
+    if (!isAuthenticated || Platform.OS === "web") return;
 
     const unsubscribe = messaging().onMessage(async (remoteMessage) => {
       console.log("[FCM Foreground]", remoteMessage.data);
@@ -1283,4 +1301,3 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     </AppContext.Provider>
   );
 };
- 

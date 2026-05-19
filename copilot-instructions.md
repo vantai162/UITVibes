@@ -91,11 +91,14 @@ npm start  # or: npm run android | npm run ios | npm run web
 ## Specialized Agents Available
 
 - **[Notification Service Backend Specialist](.github/agents/notification-service.agent.md)** — Firebase push notifications, Outbox pattern, RabbitMQ consumers
-- **[Backend API ↔ Frontend Sync Skill](.github/skills/backend-api-frontend-sync/SKILL.md)** — Connecting UI to real API
+- **[Frontend Notification Integration Specialist](.github/agents/frontend-notification.agent.md)** — Device tokens, Firebase setup, in-app notification UI, real-device testing
+
+## Documentation & Guides
+
+- **[Architecture Guide & AI Productivity](.github/AGENTS.md)** — Comprehensive patterns, component/hook samples, testing strategies, database migrations
+- **[Troubleshooting Guide](.github/TROUBLESHOOTING.md)** — Common backend/frontend issues, debugging steps, development workflow tips
+- **[API Implementation Guide](.github/API_IMPLEMENTATION.md)** — Step-by-step endpoint creation, frontend integration, patterns, testing
+- **[Backend API ↔ Frontend Sync Skill](.github/skills/backend-api-frontend-sync/SKILL.md)** — Connecting UI to real API, mock data removal
 - **[Frontend UI/UX Enhancements Skill](.github/skills/frontend-ui-ux-enhancements/SKILL.md)** — Component improvements, animations
-
-## Documentation
-
-- **[AI Agent Guide](.github/AGENTS.md)** — Architecture deep-dive, patterns, troubleshooting
 - **[Project README](README.md)** — Features, system requirements (Vietnamese)
 - **[Frontend README](frontend/README.md)** — Expo setup instructions

@@ -143,7 +143,8 @@ namespace AuthService.ServiceLayer.Implementation
                     Id = user.Id,
                     Email = user.Email,
                     Username = user.Username,
-                    IsVerified = user.IsVerified ? "True" : "False"
+                    IsVerified = user.IsVerified ? "True" : "False",
+                    Role = user.Role.ToString()
                 }
             };
         }
@@ -189,7 +190,8 @@ namespace AuthService.ServiceLayer.Implementation
                 {
                     Id = token.User.Id,
                     Email = token.User.Email,
-                    Username = token.User.Username
+                    Username = token.User.Username,
+                    Role = token.User.Role.ToString()
                 }
             };
         }
@@ -339,5 +341,44 @@ namespace AuthService.ServiceLayer.Implementation
             await _context.SaveChangesAsync();
         }
 
+        public async Task SendChangePasswordOtpAsync(Guid userId, string oldPassword)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) throw new Exception("User not found");
+
+            var email = user.Email; // Lấy email để gửi OTP
+            if (string.IsNullOrEmpty(email))
+            {
+                throw new Exception("User does not have an email address. Please verify Email first");
+            }
+
+            if (string.IsNullOrWhiteSpace(oldPassword) ||
+                !BCrypt.Net.BCrypt.Verify(oldPassword, user.PasswordHash))
+            {
+                throw new Exception("Invalid password");
+            }
+
+            await GenerateAndSaveOtpAsync(email);
+        }
+
+        public async Task VerifyChangePasswordOtpAsync(Guid userId, string email, string inputOtp, string newPassword)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) throw new Exception("User not found");
+
+            if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception("Email does not match current user");
+            }
+
+            var verifiedUser = await ValidateOtpAsync(email, inputOtp);
+            if (verifiedUser.Id != user.Id)
+            {
+                throw new Exception("Email does not match current user");
+            }
+
+            verifiedUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            await _context.SaveChangesAsync();
+        }
     }
 }

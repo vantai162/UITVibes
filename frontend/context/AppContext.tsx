@@ -171,6 +171,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     isRegistered: isDeviceTokenRegistered,
     cleanup: cleanupDeviceToken,
     requestPermission: requestPushPermission,
+    getToken,
+    registerToken,
   } = useDeviceToken({
     autoRegister: true,
     autoRequestPermission: false, // Let user choose when to enable
@@ -205,6 +207,38 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || Platform.OS === "web") return;
+
+    let cancelled = false;
+
+    const ensureDeviceTokenRegistered = async () => {
+      try {
+        const granted = await requestPushPermission();
+        if (!granted || cancelled) return;
+
+        const token = deviceToken ?? (await getToken());
+        if (!token || cancelled) return;
+
+        await registerToken(token);
+      } catch (error) {
+        console.error("[Notifications] Token registration failed:", error);
+      }
+    };
+
+    ensureDeviceTokenRegistered();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAuthenticated,
+    requestPushPermission,
+    getToken,
+    registerToken,
+    deviceToken,
+  ]);
 
   const markUserActive = useCallback(() => setIsNewUser(false), []);
 

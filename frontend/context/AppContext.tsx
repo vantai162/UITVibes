@@ -19,10 +19,14 @@ import * as api from "../services/api";
 import type { Story } from "../services/storyService";
 import { useOnlineUsers } from "../hooks/useOnlineUsers";
 import messaging from "@react-native-firebase/messaging";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDeviceToken } from "../hooks/useDeviceToken";
 import { getConnection } from "../services/signalrService";
 import type { BE_MessageResponse } from "../services/backendTypes";
 import { transformBEMessage } from "../services/messageService";
+
+const NOTIF_PERMISSION_PROMPTED_KEY =
+  "@uitvibes_notification_permission_prompted";
 
 interface AppContextType {
   // Auth / User
@@ -171,6 +175,29 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     autoRegister: true,
     autoRequestPermission: false, // Let user choose when to enable
   });
+
+  const permissionPromptedRef = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (permissionPromptedRef.current) return;
+    permissionPromptedRef.current = true;
+
+    const requestOnFirstLaunch = async () => {
+      try {
+        const prompted = await AsyncStorage.getItem(
+          NOTIF_PERMISSION_PROMPTED_KEY,
+        );
+        if (prompted) return;
+        await requestPushPermission();
+        await AsyncStorage.setItem(NOTIF_PERMISSION_PROMPTED_KEY, "1");
+      } catch (error) {
+        console.error("[Notifications] Permission request failed:", error);
+      }
+    };
+
+    requestOnFirstLaunch();
+  }, [requestPushPermission]);
 
   // ─── Auth / User ────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState<User | null>(null);

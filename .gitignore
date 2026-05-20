@@ -17,3 +17,5 @@ Backend/MessageService/MessageService.csproj.lscache
 Backend/NotificationService/NotificationService.csproj.lscache
 Backend/PostService/PostService.csproj.lscache
 Backend/UserService/UserService.csproj.lscache
+/frontend/google-services.json
+/frontend/GoogleService-Info.plist

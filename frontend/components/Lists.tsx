@@ -78,6 +78,12 @@ export const PostGrid: React.FC<{
                   <Feather name="heart" size={14} color="white" />
                   <Text style={styles.gridText}>{post.likes}</Text>
                 </View>
+                {(post.images?.length ?? 0) > 1 && (
+                  <View style={styles.multiImageIndicator}>
+                    <Feather name="layers" size={10} color="#FFFFFF" strokeWidth={2} />
+                    <Text style={styles.multiImageText}>{post.images!.length}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
             {/* Fill empty slots */}
@@ -234,6 +240,23 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: "600",
     fontSize: 12,
+  },
+  multiImageIndicator: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
+  },
+  multiImageText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
   },
   userItem: {
     flexDirection: "row",

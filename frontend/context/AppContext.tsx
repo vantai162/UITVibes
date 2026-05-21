@@ -74,7 +74,7 @@ interface AppContextType {
   addComment: (postId: string, text: string, parentCommentId?: string) => Promise<void>;
   deleteComment: (postId: string, commentId: string) => Promise<void>;
   createPost: (
-    image: string,
+    images: string[],
     caption: string,
     location?: string,
   ) => Promise<Post | null>;
@@ -543,19 +543,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const createPost = useCallback(
     async (
-      image: string,
+      images: string[],
       caption: string,
       location?: string,
     ): Promise<Post | null> => {
       try {
-        const newPost = await api.createPost(image, caption, location);
+        const newPost = await api.createPost(images, caption, location);
         setPosts((prev) => [newPost, ...prev]);
-        setMyPosts((prev) => [newPost, ...prev]); // Thêm vào myPosts cho profile
-        // Refresh myPosts từ server để đảm bảo đồng bộ
+        setMyPosts((prev) => [newPost, ...prev]);
         await refreshMyPosts();
-        // Cập nhật số posts trên profile ngay lập tức
         setCurrentUser((prev) => (prev ? { ...prev, posts: prev.posts + 1 } : prev));
-        setIsNewUser(false); // Đã có bài viết → không còn là new user
+        setIsNewUser(false);
         return newPost;
       } catch (error) {
         console.error("Failed to create post:", error);

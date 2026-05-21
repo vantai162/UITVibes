@@ -27,3 +27,4 @@ export {
   SkeletonListItem,
   UserListSkeleton,
 } from './SkeletonLoader';
+export { ImageCarousel } from './ImageCarousel';

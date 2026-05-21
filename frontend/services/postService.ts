@@ -12,6 +12,8 @@ import {
   BE_RepostStatusResponse,
 } from "./backendTypes";
 import { fetchUserById } from "./userService";
+import { getCurrentUser } from "./api";
+import { getCurrentUserId } from "./session";
 
 // ─── Comment transformer ─────────────────────────────────────────────────────
 async function fetchRepliesForComment(
@@ -144,12 +146,16 @@ function transformBEPost(post: BE_PostResponse, author?: User): Post {
     "media:",
     JSON.stringify(post.media),
   );
+  const allImages = post.media?.map((m) => m.url) ?? [];
   return {
     id: post.id,
     userId: post.userId,
     user: author || {
       id: post.userId,
       username: "",
+      fullName: "",
+      coverImage: "",
+      gender: "",
       displayName: "",
       avatar: "",
       bio: "",
@@ -158,7 +164,8 @@ function transformBEPost(post: BE_PostResponse, author?: User): Post {
       posts: 0,
       isVerified: false,
     },
-    image: post.media?.[0]?.url || "",
+    image: allImages[0] ?? "",
+    images: allImages,
     caption: post.content,
     likes: post.likesCount,
     comments: [],
@@ -379,64 +386,68 @@ export async function getBookmarkedPosts(): Promise<Post[]> {
 }
 
 export async function createPost(
-  imageUri: string,
+  imageUris: string[],
   caption: string,
   location?: string,
 ): Promise<Post> {
-  const isLocal =
-    imageUri.startsWith("file://") ||
-    imageUri.startsWith("content://") ||
-    imageUri.startsWith("blob:") ||
-    imageUri.startsWith("data:");
+  // Upload all local media to Cloudinary, keep remote URLs as-is
+  const uploadedMedia = await Promise.all(
+    imageUris.map(async (uri, index) => {
+      const isLocal =
+        uri.startsWith("file://") ||
+        uri.startsWith("content://") ||
+        uri.startsWith("blob:") ||
+        uri.startsWith("data:");
 
-  let mediaUrl = imageUri;
-  let publicId: string | undefined;
-  let thumbnailUrl: string | undefined;
-  let width: number | undefined;
-  let height: number | undefined;
+      if (!isLocal) {
+        return { url: uri, displayOrder: index };
+      }
 
-  if (isLocal) {
-    const uploaded = await uploadMedia(imageUri, "image");
-    mediaUrl = uploaded.url;
-    publicId = uploaded.publicId;
-    thumbnailUrl = uploaded.thumbnailUrl;
-    width = uploaded.width;
-    height = uploaded.height;
-  }
+      const uploaded = await uploadMedia(uri, "image");
+      return {
+        url: uploaded.url,
+        publicId: uploaded.publicId,
+        thumbnailUrl: uploaded.thumbnailUrl,
+        width: uploaded.width,
+        height: uploaded.height,
+        displayOrder: index,
+      };
+    }),
+  );
 
   const body: CreatePostBody = {
     content: caption,
     location,
     visibility: 0,
-    media: [
-      {
-        type: 0,
-        url: mediaUrl,
-        publicId,
-        thumbnailUrl,
-        displayOrder: 0,
-        width,
-        height,
-      },
-    ],
+    media: uploadedMedia.map((m) => ({
+      type: 0,
+      url: m.url,
+      publicId: m.publicId,
+      thumbnailUrl: m.thumbnailUrl,
+      displayOrder: m.displayOrder,
+      width: m.width,
+      height: m.height,
+    })),
   };
 
   const { data } = await apiClient.post<BE_PostResponse>("/post", body);
-  const author =
-    getCurrentUser() ||
-    ({
+  let author = await getCurrentUser();
+  if (!author) {
+    author = {
       id: getCurrentUserId(),
       username: "",
       displayName: "You",
       fullName: "",
       gender: "",
       avatar: "",
+      coverImage: "",
       bio: "",
       followers: 0,
       following: 0,
       posts: 0,
       isVerified: false,
-    } as User);
+    };
+  }
   return transformBEPost(data, author);
 }
 
@@ -556,15 +567,8 @@ export async function repostPost(postId: string): Promise<Post> {
 
 export async function undoRepost(postId: string): Promise<Post> {
   await apiClient.delete(`/post/${postId}/repost`);
-  // Reload post để lấy fresh RepostCount
-  // Nếu postId là original post → reload chính nó
-  // Nếu postId là repost record → reload original post (idempotent)
   const post = await getPostById(postId);
   return post!;
-  await apiClient.delete(`/post/${postId}/repost`);
-  // Backend không trả body, nên gọi lại API repost/status để lấy fresh count
-  // Trả về 0 để caller giảm count tạm, rồi reload post để lấy count chuẩn
-  return 0;
 }
 
 export async function getRepostStatus(

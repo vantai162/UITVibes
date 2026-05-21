@@ -62,6 +62,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     }
   };
 
+  const handleLikeLongPress = () => {
+    router.push(`/post/likes?postId=${post.id}`);
+  };
+
   const handleBookmark = async () => {
     await toggleBookmark(post.id);
   };
@@ -143,6 +147,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         <View style={styles.actionsRow}>
           <TouchableOpacity
             onPress={handleLike}
+            onLongPress={handleLikeLongPress}
+            delayLongPress={400}
             style={styles.actionGroup}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >

@@ -5,6 +5,7 @@ import {
   BE_CommentResponse,
   BE_CommentLikeResponse,
   BE_LikeResponse,
+  BE_LikeDto,
   BE_HashtagDto,
   CreatePostBody,
   BE_RepostResponse,
@@ -246,6 +247,11 @@ export async function getPostById(id: string): Promise<Post | undefined> {
   const post = transformBEPost(data, author);
   post.comments = comments;
   return post;
+}
+
+export async function getPostLikes(postId: string): Promise<BE_LikeDto[]> {
+  const { data } = await apiClient.get<BE_LikeDto[]>(`/post/${postId}/likes`);
+  return data;
 }
 
 export async function getPostComments(postId: string): Promise<CommentType[]> {

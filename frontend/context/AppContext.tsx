@@ -399,22 +399,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   const toggleLike = useCallback(
-    async (postId: string) => {
+    async (postId: string, isCurrentlyLiked: boolean) => {
       // Optimistic update
       setPosts((prev) =>
         prev.map((post) => {
           if (post.id === postId) {
             return {
               ...post,
-              isLiked: !post.isLiked,
-              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+              isLiked: !isCurrentlyLiked,
+              likes: isCurrentlyLiked ? post.likes - 1 : post.likes + 1,
             };
           }
           return post;
         }),
       );
       try {
-        await api.toggleLike(postId);
+        const newLikedState = await api.toggleLike(postId, isCurrentlyLiked);
+        // Sync with server-returned state
+        setPosts((prev) =>
+          prev.map((post) => {
+            if (post.id === postId) {
+              return { ...post, isLiked: newLikedState };
+            }
+            return post;
+          }),
+        );
       } catch (error) {
         // Revert on failure
         await refreshPosts();

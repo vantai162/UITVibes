@@ -35,7 +35,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const handleDoubleTap = useCallback(async () => {
     if (!localLiked) {
       setLocalLiked(true);
-      await toggleLike(post.id);
+      await toggleLike(post.id, false);
     }
     playHeart();
   }, [localLiked, post.id, playHeart, toggleLike]);
@@ -52,10 +52,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   // ── Button handlers ────────────────────────────────────────────────────
   const handleLike = async () => {
-    const newState = !localLiked;
-    setLocalLiked(newState);
-    await toggleLike(post.id);
-    // Micro-bounce driven by the animated icon component
+    const wasLiked = localLiked;
+    setLocalLiked(!wasLiked);
+    try {
+      await toggleLike(post.id, wasLiked);
+    } catch {
+      // Revert on error
+      setLocalLiked(wasLiked);
+    }
   };
 
   const handleBookmark = async () => {

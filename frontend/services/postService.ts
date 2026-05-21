@@ -451,7 +451,11 @@ export async function deletePost(postId: string): Promise<boolean> {
   return true;
 }
 
-export async function toggleLike(postId: string): Promise<boolean> {
+export async function toggleLike(postId: string, isCurrentlyLiked: boolean): Promise<boolean> {
+  if (isCurrentlyLiked) {
+    await apiClient.delete(`/post/${postId}/like`);
+    return false;
+  }
   const { data } = await apiClient.post<BE_LikeResponse>(
     `/post/${postId}/like`,
   );

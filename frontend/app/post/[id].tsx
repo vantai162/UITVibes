@@ -102,16 +102,29 @@ export default function PostDetailScreen() {
 
   const handleLike = async () => {
     if (post) {
-      await toggleLike(post.id);
+      const wasLiked = post.isLiked;
       setPost((prev) =>
         prev
           ? {
               ...prev,
-              isLiked: !prev.isLiked,
-              likes: prev.isLiked ? prev.likes - 1 : prev.likes + 1,
+              isLiked: !wasLiked,
+              likes: wasLiked ? prev.likes - 1 : prev.likes + 1,
             }
           : null,
       );
+      try {
+        const newLikedState = await toggleLike(post.id, wasLiked);
+        setPost((prev) =>
+          prev ? { ...prev, isLiked: newLikedState } : null,
+        );
+      } catch {
+        // Revert on error
+        setPost((prev) =>
+          prev
+            ? { ...prev, isLiked: wasLiked }
+            : null,
+        );
+      }
     }
   };
 

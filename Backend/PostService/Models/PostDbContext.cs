@@ -25,6 +25,10 @@ public class PostDbContext : DbContext
 
     public DbSet<PostReport> PostReports { get; set; }
 
+    // Highlight entities
+    public DbSet<HighlightGroup> HighlightGroups { get; set; }
+    public DbSet<HighlightItem> HighlightItems { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -245,5 +249,36 @@ public class PostDbContext : DbContext
             .WithMany(p => p.Reports)
             .HasForeignKey(r => r.PostId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ===== HIGHLIGHT GROUP CONFIGURATION =====
+        modelBuilder.Entity<HighlightGroup>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.CoverImage).HasMaxLength(500);
+
+            entity.HasMany(e => e.Items)
+                .WithOne(i => i.HighlightGroup)
+                .HasForeignKey(i => i.HighlightGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ===== HIGHLIGHT ITEM CONFIGURATION =====
+        modelBuilder.Entity<HighlightItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.HighlightGroupId);
+            entity.HasIndex(e => e.StoryItemId);
+            // Composite unique index to prevent duplicate highlight items
+            entity.HasIndex(e => new { e.HighlightGroupId, e.StoryItemId }).IsUnique();
+
+            entity.HasOne(e => e.StoryItem)
+                .WithMany()
+                .HasForeignKey(e => e.StoryItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

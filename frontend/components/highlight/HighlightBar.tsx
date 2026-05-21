@@ -1,8 +1,9 @@
 /**
- * HighlightBar — Instagram-style horizontal highlight strip on profile page.
+ * HighlightBar — Instagram-style horizontal strip on profile page.
  *
- * Renders circular highlight thumbnails in a horizontal scroll view.
- * Tapping a highlight opens the detail view.
+ * Shows:
+ * - "Add story" circle (current user only) → navigates to /story/create
+ * - Highlight circles (existing highlights) → opens viewer modal
  */
 import React, { useState } from "react";
 import {
@@ -16,7 +17,17 @@ import {
   Modal,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { HighlightGroup, getHighlightDetail, deleteHighlightGroup } from "../../services/highlightService";
+import { useRouter } from "expo-router";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
+import {
+  HighlightGroup,
+  getHighlightDetail,
+  deleteHighlightGroup,
+} from "../../services/highlightService";
 import { AppColors, layoutPadding, borderRadius } from "../../constants/theme";
 import { Typography } from "../../constants/typography";
 
@@ -60,6 +71,33 @@ const HighlightCircle: React.FC<{
     </Text>
   </TouchableOpacity>
 );
+
+const AddStoryCircle = () => {
+  const router = useRouter();
+  const pulseScale = useSharedValue(1);
+
+  const startPulse = () => { pulseScale.value = withSpring(0.9); };
+  const endPulse = () => { pulseScale.value = withSpring(1.0); };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+
+  return (
+    <TouchableOpacity
+      onPress={() => router.push("/story/create" as any)}
+      onPressIn={startPulse}
+      onPressOut={endPulse}
+      activeOpacity={1}
+      style={styles.circleItem}
+    >
+      <Animated.View style={[styles.addStoryCircle, animatedStyle]}>
+        <Feather name="plus" size={26} color={AppColors.primary} strokeWidth={2} />
+      </Animated.View>
+      <Text style={styles.addStoryText}>Add story</Text>
+    </TouchableOpacity>
+  );
+};
 
 const AddHighlightCircle: React.FC<{ onPress: () => void }> = ({ onPress }) => (
   <TouchableOpacity style={styles.circleItem} onPress={onPress} activeOpacity={0.7}>
@@ -202,9 +240,7 @@ export const HighlightBar: React.FC<HighlightBarProps> = ({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {isCurrentUser && (
-            <AddHighlightCircle onPress={() => {}} />
-          )}
+          {isCurrentUser && <AddStoryCircle />}
           {highlights.map((highlight) => (
             <HighlightCircle
               key={highlight.id}
@@ -237,6 +273,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: layoutPadding,
     gap: 16,
   },
+  addStoryCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: AppColors.surfaceElevated,
+    borderWidth: 2,
+    borderColor: AppColors.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addStoryText: {
+    ...Typography.meta,
+    marginTop: 4,
+    color: AppColors.text,
+  },
   circleItem: {
     alignItems: "center",
     width: 64,
@@ -246,7 +297,7 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     borderWidth: 2,
-    borderColor: AppColors.primary,
+    borderColor: "#22c55e",
     overflow: "hidden",
     backgroundColor: AppColors.surface,
   },

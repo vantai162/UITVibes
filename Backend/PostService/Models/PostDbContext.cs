@@ -29,6 +29,12 @@ public class PostDbContext : DbContext
     public DbSet<HighlightGroup> HighlightGroups { get; set; }
     public DbSet<HighlightItem> HighlightItems { get; set; }
 
+    public DbSet<Reel> Reels { get; set; }
+    public DbSet<ReelLike> ReelLikes { get; set; }
+    public DbSet<ReelComment> ReelComments { get; set; }
+    public DbSet<ReelCommentLike> ReelCommentLikes { get; set; }
+    public DbSet<ReelShare> ReelShares { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -278,6 +284,104 @@ public class PostDbContext : DbContext
             entity.HasOne(e => e.StoryItem)
                 .WithMany()
                 .HasForeignKey(e => e.StoryItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+
+        // ===== REEL CONFIGURATION =====
+        modelBuilder.Entity<Reel>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+            entity.Property(e => e.Caption).HasMaxLength(500);
+            entity.Property(e => e.VideoUrl).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.VideoPublicId).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
+            entity.Property(e => e.ThumbnailPublicId).HasMaxLength(500);
+
+            entity.HasMany(e => e.Likes)
+                .WithOne(l => l.Reel)
+                .HasForeignKey(l => l.ReelId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Comments)
+                .WithOne(c => c.Reel)
+                .HasForeignKey(c => c.ReelId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Shares)
+                .WithOne(s => s.Reel)
+                .HasForeignKey(s => s.ReelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+
+        modelBuilder.Entity<ReelLike>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Chống like trùng lặp
+            entity.HasIndex(e => new { e.ReelId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne(e => e.Reel)
+                .WithMany(r => r.Likes)
+                .HasForeignKey(e => e.ReelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReelComment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.ReelId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.ParentCommentId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.Property(e => e.Content).IsRequired().HasMaxLength(1000);
+
+            // Self-referencing for nested comments
+            entity.HasOne(e => e.ParentComment)
+                .WithMany(c => c.Replies)
+                .HasForeignKey(e => e.ParentCommentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(e => e.Likes)
+                .WithOne(l => l.ReelComment)
+                .HasForeignKey(l => l.ReelCommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ===== REEL COMMENT LIKE CONFIGURATION =====
+        modelBuilder.Entity<ReelCommentLike>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Chống like trùng lặp
+            entity.HasIndex(e => new { e.ReelCommentId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.ReelComment)
+                .WithMany(c => c.Likes)
+                .HasForeignKey(e => e.ReelCommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ===== REEL SHARE CONFIGURATION =====
+        modelBuilder.Entity<ReelShare>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ReelId, e.UserId });
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne(e => e.Reel)
+                .WithMany(r => r.Shares)
+                .HasForeignKey(e => e.ReelId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

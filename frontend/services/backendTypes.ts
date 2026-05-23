@@ -310,6 +310,40 @@ export interface BE_StoryItemDetail {
   createdAt: string;
 }
 
+// ============ REPORT TYPES ============
+
+export type ReportReason =
+  | 'Spam'
+  | 'Fake Account'
+  | 'Harassment or Bullying'
+  | 'Inappropriate Content'
+  | 'Scam or Fraud'
+  | 'Hate Speech'
+  | 'Other';
+
+export const REPORT_REASONS: ReportReason[] = [
+  'Spam',
+  'Fake Account',
+  'Harassment or Bullying',
+  'Inappropriate Content',
+  'Scam or Fraud',
+  'Hate Speech',
+  'Other',
+];
+
+/** Request body for POST /user/reports — mirrors backend ReportUserRequest */
+export interface BE_ReportUserRequest {
+  TargetUserId: string;
+  Reason: ReportReason;
+  AdditionalDetails?: string;
+}
+
+/** Response from the report endpoint */
+export interface BE_ReportUserResponse {
+  success: boolean;
+  message?: string;
+}
+
 // ============ ADMIN TYPES ============
 
 export type AdminReportStatus = "Pending" | "Resolved" | "Rejected";

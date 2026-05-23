@@ -3,6 +3,7 @@ import apiClient from "./httpClient";
 export * from "./authService";
 export * from "./userService";
 export * from "./postService";
+export * from "./adminService";
 export {
   getStories,
   getUserStories,

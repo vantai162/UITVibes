@@ -29,6 +29,7 @@ export interface BE_AuthResponse {
     id: string;
     email: string;
     username: string;
+    role: string; // "User" | "Admin"
   };
 }
 
@@ -307,4 +308,55 @@ export interface BE_StoryItemDetail {
   displayOrder: number;
   duration: number | null;
   createdAt: string;
+}
+
+// ============ ADMIN TYPES ============
+
+export type AdminReportStatus = "Pending" | "Resolved" | "Rejected";
+
+export interface BE_UserReport {
+  id: string;
+  reporterUserId: string;
+  reportedUserId: string;
+  reporterDisplayName: string;
+  reportedDisplayName: string;
+  reason: string;
+  createdAt: string;
+  status: AdminReportStatus;
+  adminNote: string | null;
+  resolvedAt: string | null;
+}
+
+export interface BE_PostReport {
+  id: string;
+  postId: string;
+  reporterUserId: string;
+  reporterDisplayName: string;
+  postContent: string;
+  postMediaUrls: string[];
+  reason: string;
+  createdAt: string;
+  status: AdminReportStatus;
+  adminNote: string | null;
+  resolvedAt: string | null;
+}
+
+export interface BE_AdminUserProfile {
+  id: string;
+  userId: string;
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  coverImageUrl: string;
+  dateOfBirth: string | null;
+  location: string;
+  website: string;
+  fullName: string;
+  gender: string;
+  isActive: boolean;
+  isVerified: boolean;
+  createdAt: string;
+  followersCount: number;
+  followingCount: number;
+  postsCount: number;
 }

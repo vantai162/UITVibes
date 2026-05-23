@@ -1,7 +1,7 @@
 /**
  * ReportsScreen — Admin view of user & post reports
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -120,6 +120,12 @@ function UserReportCard({
         <Feather name="flag" size={12} color={AppColors.textMuted} />
         <Text style={styles.reasonText}>{report.reason}</Text>
       </View>
+      {report.additionalDetails ? (
+        <View style={styles.noteRow}>
+          <Feather name="align-left" size={12} color={AppColors.textMuted} />
+          <Text style={styles.noteText}>{report.additionalDetails}</Text>
+        </View>
+      ) : null}
       {report.adminNote ? (
         <View style={styles.noteRow}>
           <Feather name="message-square" size={12} color={AppColors.textMuted} />
@@ -252,8 +258,15 @@ export default function ReportsScreen() {
 
   const PAGE_SIZE = 20;
 
+  // Stable ref so callbacks always call the latest fetchReports
+  const fetchReportsRef = useRef<(pageNum: number, isRefresh: boolean) => Promise<void>>();
+  const isFetchingRef = useRef(false);
+
   const fetchReports = useCallback(
     async (pageNum: number, isRefresh = false) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+
       try {
         const status = filter === "All" ? undefined : filter;
         const [u, p] = await Promise.all([
@@ -271,6 +284,7 @@ export default function ReportsScreen() {
       } catch (err) {
         console.error("[AdminReports] fetchReports failed:", err);
       } finally {
+        isFetchingRef.current = false;
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -279,28 +293,34 @@ export default function ReportsScreen() {
     [filter],
   );
 
+  // Keep the ref in sync with the latest fetchReports
+  fetchReportsRef.current = fetchReports;
+
   useEffect(() => {
+    if (isFetchingRef.current) return;
     setLoading(true);
     setPage(0);
     setHasMore(true);
     fetchReports(0, true);
-  }, [fetchReports]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   const onRefresh = () => {
+    if (isFetchingRef.current) return;
     setRefreshing(true);
     setPage(0);
+    setHasMore(false);
     fetchReports(0, true);
   };
 
   const onEndReached = () => {
-    if (!loadingMore && hasMore) {
-      setLoadingMore(true);
-      setPage((p) => {
-        const next = p + 1;
-        fetchReports(next, false);
-        return next;
-      });
-    }
+    if (isFetchingRef.current || loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    setPage((p) => {
+      const next = p + 1;
+      fetchReports(next, false);
+      return next;
+    });
   };
 
   const handleResolve = async (reportId: string, isUser: boolean) => {

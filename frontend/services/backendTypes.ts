@@ -355,6 +355,7 @@ export interface BE_UserReport {
   reporterDisplayName: string;
   reportedDisplayName: string;
   reason: string;
+  additionalDetails: string | null;
   createdAt: string;
   status: AdminReportStatus;
   adminNote: string | null;

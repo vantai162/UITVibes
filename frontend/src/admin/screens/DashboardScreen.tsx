@@ -147,20 +147,28 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
         </View>
         <View style={styles.actionList}>
-          <View style={styles.actionItem}>
+          <TouchableOpacity
+            style={styles.actionItem}
+            activeOpacity={0.7}
+            onPress={() => router.push("/admin/reports")}
+          >
             <View style={styles.actionLeft}>
               <Feather name="flag" size={18} color={AppColors.primary} />
               <Text style={styles.actionText}>Review pending reports</Text>
             </View>
             <Feather name="chevron-right" size={16} color={AppColors.textMuted} />
-          </View>
-          <View style={styles.actionItem}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            activeOpacity={0.7}
+            onPress={() => router.push("/admin/users")}
+          >
             <View style={styles.actionLeft}>
               <Feather name="users" size={18} color={AppColors.primary} />
               <Text style={styles.actionText}>Manage user accounts</Text>
             </View>
             <Feather name="chevron-right" size={16} color={AppColors.textMuted} />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* System Status */}

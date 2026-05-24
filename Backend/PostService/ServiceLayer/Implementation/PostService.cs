@@ -586,6 +586,7 @@ public class PostService : IPostService
                     ReporterDisplayName = displayName,
                     ReporterProfile = profile?.Found == true ? profile : null,
                     Reason = r.Reason,
+                    AdditionalDetails = r.AdditionalDetails,
                     Status = r.Status,
                     AdminNote = r.AdminNote,
                     CreatedAt = r.CreatedAt,
@@ -612,6 +613,7 @@ public class PostService : IPostService
             PostId = request.PostId,
             ReporterId = userId,
             Reason = request.Reason,
+            AdditionalDetails = request.AdditionalDetails,
             Status = ReportStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -637,6 +639,7 @@ public class PostService : IPostService
             ReporterDisplayName = reporterDisplayName,
             ReporterProfile = reporterProfileResult.Found ? reporterProfileResult : null,
             Reason = report.Reason,
+            AdditionalDetails = report.AdditionalDetails,
             Status = report.Status,
             CreatedAt = report.CreatedAt
         };

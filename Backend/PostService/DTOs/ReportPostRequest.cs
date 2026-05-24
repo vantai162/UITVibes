@@ -4,6 +4,6 @@ namespace PostService.DTOs
     {
         public Guid PostId { get; set; }
         public string Reason { get; set; } = string.Empty;
-
+        public string? AdditionalDetails { get; set; }
     }
 }

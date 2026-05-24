@@ -19,6 +19,7 @@ namespace PostService.DTOs
 
         // Nội dung report
         public string Reason { get; set; } = string.Empty;
+        public string? AdditionalDetails { get; set; }
 
         // Trạng thái xử lý
         public ReportStatus Status { get; set; }

@@ -1,4 +1,4 @@
-﻿namespace PostService.Models
+namespace PostService.Models
 {
     public class PostReport
     {

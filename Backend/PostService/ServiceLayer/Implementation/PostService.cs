@@ -545,6 +545,7 @@ public class PostService : IPostService
     {
         var query = _context.PostReports
             .Include(r => r.Post)
+            .ThenInclude(p => p.Media)
             .AsQueryable();
         if (status.HasValue)
         {
@@ -579,6 +580,8 @@ public class PostService : IPostService
                 {
                     Id = r.Id,
                     PostId = r.PostId,
+                    PostContent = r.Post?.Content ?? string.Empty,
+                    PostMediaUrls = r.Post?.Media.Select(m => m.Url).ToList() ?? new List<string>(),
                     ReporterId = r.ReporterId,
                     ReporterDisplayName = displayName,
                     ReporterProfile = profile?.Found == true ? profile : null,
@@ -618,10 +621,18 @@ public class PostService : IPostService
 
         var reporterProfileResult = await _userProfileRpcClient.GetProfileAsync(userId);
         var reporterDisplayName = reporterProfileResult.Found ? reporterProfileResult.DisplayName : "Someone";
+
+        // Load post content for the DTO
+        var post = await _context.Posts
+            .Include(p => p.Media)
+            .FirstOrDefaultAsync(p => p.Id == request.PostId);
+
         return new PostReportDto
         {
             Id = report.Id,
             PostId = report.PostId,
+            PostContent = post?.Content ?? string.Empty,
+            PostMediaUrls = post?.Media.Select(m => m.Url).ToList() ?? new List<string>(),
             ReporterId = report.ReporterId,
             ReporterDisplayName = reporterDisplayName,
             ReporterProfile = reporterProfileResult.Found ? reporterProfileResult : null,

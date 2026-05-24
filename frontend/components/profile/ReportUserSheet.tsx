@@ -63,6 +63,9 @@ export function ReportUserSheet({
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Local state so animation out completes before React unmounts the Modal.
+  const [isRendered, setIsRendered] = useState(false);
+
   // Animation refs — fresh instances each time so they re-init on re-mount
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current;
@@ -77,9 +80,10 @@ export function ReportUserSheet({
     }
   }, [visible]);
 
-  // Animate in when sheet becomes visible
+  // Mount animation
   useEffect(() => {
     if (visible) {
+      setIsRendered(true);
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
@@ -102,47 +106,48 @@ export function ReportUserSheet({
     }
   }, [visible]);
 
-  const animateOut = (callback: () => void) => {
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetOpacity, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetTranslateY, {
-        toValue: SHEET_MAX_HEIGHT,
-        damping: 30,
-        stiffness: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(callback);
-  };
+  // Cleanup: if not visible but still rendered, animate out then unmount
+  useEffect(() => {
+    if (!visible && isRendered) {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: SHEET_MAX_HEIGHT,
+          damping: 30,
+          stiffness: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setIsRendered(false));
+    }
+  }, [visible, isRendered]);
 
-  const handleClose = () => {
-    animateOut(onClose);
-  };
+  const handleClose = () => onClose();
 
   const handleSubmit = async () => {
     if (!selectedReason || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      // Import lazily so the service is only loaded when this is called
       const { reportUser } = await import('../../services/reportService');
       await reportUser(reportedUserId, selectedReason, additionalDetails);
-      animateOut(() => onReportSuccess({ userId: reportedUserId, reason: selectedReason }));
+      onClose();
+      onReportSuccess({ userId: reportedUserId, reason: selectedReason });
     } catch (err) {
-      // Keep sheet open so user can retry; show error via toast is handled by parent
       console.error('[ReportUserSheet] submit error:', err);
       setIsSubmitting(false);
     }
   };
 
-  if (!visible) return null;
+  // Don't render anything while closing animation finishes
+  if (!isRendered) return null;
 
   return (
     <Modal

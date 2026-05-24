@@ -9,7 +9,7 @@
  *
  * Design: same animation pattern as UserActionsSheet / ReportUserSheet
  */
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -62,12 +62,16 @@ export function PostActionsSheet({
 }: PostActionsSheetProps) {
   const isOwner = currentUserId === postOwnerId;
 
+  // Local state so animation out completes before React unmounts the Modal.
+  const [isRendered, setIsRendered] = useState(false);
+
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
 
-  // Animate in when sheet becomes visible
+  // Mount animation
   useEffect(() => {
     if (visible) {
+      setIsRendered(true);
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
@@ -85,33 +89,35 @@ export function PostActionsSheet({
     }
   }, [visible]);
 
-  const animateOut = (callback: () => void) => {
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetTranslateY, {
-        toValue: SHEET_HEIGHT,
-        damping: 30,
-        stiffness: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(callback);
-  };
+  // Cleanup: if not visible but still rendered, animate out
+  useEffect(() => {
+    if (!visible && isRendered) {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: SHEET_HEIGHT,
+          damping: 30,
+          stiffness: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setIsRendered(false));
+    }
+  }, [visible, isRendered]);
 
-  const handleClose = () => {
-    animateOut(onClose);
-  };
+  const handleClose = () => onClose();
 
   const handleReportPost = () => {
-    handleClose();
-    onReportPost();
+    // Close this sheet, then open the report sheet after animation completes.
+    setTimeout(() => onReportPost(), 220);
+    onClose();
   };
 
   const handleBlockUser = () => {
-    handleClose();
+    onClose();
     Alert.alert(
       'Block User',
       `Are you sure you want to block @${postOwnerDisplayName}? You will no longer see their posts or be able to message them.`,
@@ -123,7 +129,7 @@ export function PostActionsSheet({
   };
 
   const handleDeletePost = () => {
-    handleClose();
+    onClose();
     Alert.alert(
       'Delete Post',
       'Are you sure you want to delete this post? This action cannot be undone.',
@@ -134,7 +140,8 @@ export function PostActionsSheet({
     );
   };
 
-  if (!visible) return null;
+  // Don't render anything while closing animation finishes
+  if (!isRendered) return null;
 
   return (
     <Modal

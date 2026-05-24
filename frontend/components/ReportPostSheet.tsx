@@ -132,7 +132,7 @@ export function ReportPostSheet({
     setIsSubmitting(true);
     try {
       const { reportPost } = await import('../services/reportService');
-      await reportPost(postId, selectedReason);
+      await reportPost(postId, selectedReason, additionalDetails);
       onClose();
       onReportSuccess({ postId, reason: selectedReason });
     } catch (err) {

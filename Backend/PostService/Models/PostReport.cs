@@ -14,6 +14,9 @@ namespace PostService.Models
         // Nội dung report
         public string Reason { get; set; } = string.Empty;
 
+        // Chi tiết bổ sung từ người report
+        public string? AdditionalDetails { get; set; }
+
         // Trạng thái xử lý
         public ReportStatus Status { get; set; } = ReportStatus.Pending;
 

@@ -88,7 +88,7 @@ export default function CreateScreen() {
   const [toastType, setToastType] = React.useState<'success' | 'error'>('success');
   const [selectedVisibility, setSelectedVisibility] = React.useState<PostVisibility>('Public');
   const [showVisibilityPicker, setShowVisibilityPicker] = React.useState(false);
-  const { createPost, currentUser } = useApp();
+  const { createPost, createReel, currentUser } = useApp();
   const router = useRouter();
 
   const tabAnim = useSharedValue(createType === 'post' ? 0 : 1);
@@ -152,6 +152,16 @@ export default function CreateScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
+      const fileSize = result.assets[0].fileSize;
+      const maxSize = 100 * 1024 * 1024; // 100MB in bytes
+
+      if (fileSize && fileSize > maxSize) {
+        setToastType('error');
+        setToastMessage('The file you selected is too large. The maximum size is 100MB.');
+        setToastVisible(true);
+        return;
+      }
+
       setSelectedMedia((prev) => [result.assets[0].uri]);
     }
   };
@@ -185,14 +195,16 @@ export default function CreateScreen() {
 
     setIsPosting(true);
     try {
-      const visibilityValue = selectedVisibility === 'Public' ? 0 : selectedVisibility === 'Followers' ? 1 : 2;
-      await createPost(selectedMedia, caption, undefined, visibilityValue);
-      setToastType('success');
-      setToastMessage(
-        createType === 'reels'
-          ? 'Your reel has been published!'
-          : 'Your post has been published!'
-      );
+      if (createType === 'reels') {
+        await createReel(selectedMedia[0], caption);
+        setToastType('success');
+        setToastMessage('Your reel has been published!');
+      } else {
+        const visibilityValue = selectedVisibility === 'Public' ? 0 : selectedVisibility === 'Followers' ? 1 : 2;
+        await createPost(selectedMedia, caption, undefined, visibilityValue);
+        setToastType('success');
+        setToastMessage('Your post has been published!');
+      }
       setToastVisible(true);
       setSelectedMedia([]);
       setCaption('');

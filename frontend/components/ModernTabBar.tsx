@@ -60,6 +60,12 @@ const FLOAT_BOTTOM       = 14;
 /** Bottom inset: additional breathing room on top of safe area. */
 const BOTTOM_INSET       = 4;
 
+/**
+ * Total bottom offset for content that needs to avoid the floating tab bar.
+ * Use this value as bottom padding/margin for overlay content.
+ */
+export const TAB_BAR_BOTTOM_OFFSET = BAR_HEIGHT + BOTTOM_INSET + FLOAT_BOTTOM;
+
 /** Create-tab is index 3 (centered in the 7-tab layout). */
 const CREATE_INDEX = 3;
 

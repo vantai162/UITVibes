@@ -274,21 +274,15 @@ export default function CreateScreen() {
           </Animated.View>
         </View>
 
-        {/* Title row: avatar + headline + Share (aligned) */}
+        {/* Header row: Close button (X) | Title | Share */}
         <View style={styles.headerRow}>
           <TouchableOpacity
-            onPress={() => router.push('/(tabs)/profile' as any)}
-            activeOpacity={0.85}
-            style={styles.avatarBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            style={styles.closeBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {currentUser ? (
-              <Avatar user={currentUser} size="small" />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Feather name="user" size={18} color={AppColors.iconMuted} strokeWidth={2} />
-              </View>
-            )}
+            <Feather name="x" size={22} color={AppColors.text} strokeWidth={2} />
           </TouchableOpacity>
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerTitle}>New {typeLabel}</Text>
@@ -626,6 +620,14 @@ const styles = StyleSheet.create({
   },
   avatarBtn: {
     marginRight: 12,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: AppColors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarFallback: {
     width: 32,

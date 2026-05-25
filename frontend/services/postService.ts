@@ -389,6 +389,7 @@ export async function createPost(
   imageUris: string[],
   caption: string,
   location?: string,
+  visibility?: number,
 ): Promise<Post> {
   // Upload all local media to Cloudinary, keep remote URLs as-is
   const uploadedMedia = await Promise.all(
@@ -418,7 +419,7 @@ export async function createPost(
   const body: CreatePostBody = {
     content: caption,
     location,
-    visibility: 0,
+    visibility: visibility ?? 0,
     media: uploadedMedia.map((m) => ({
       type: 0,
       url: m.url,

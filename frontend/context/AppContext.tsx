@@ -77,6 +77,7 @@ interface AppContextType {
     images: string[],
     caption: string,
     location?: string,
+    visibility?: number,
   ) => Promise<Post | null>;
   updatePost: (postId: string, caption: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
@@ -546,9 +547,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       images: string[],
       caption: string,
       location?: string,
+      visibility?: number,
     ): Promise<Post | null> => {
       try {
-        const newPost = await api.createPost(images, caption, location);
+        const newPost = await api.createPost(images, caption, location, visibility);
         setPosts((prev) => [newPost, ...prev]);
         setMyPosts((prev) => [newPost, ...prev]);
         await refreshMyPosts();

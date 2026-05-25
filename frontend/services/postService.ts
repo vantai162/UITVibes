@@ -10,6 +10,7 @@ import {
   CreatePostBody,
   BE_RepostResponse,
   BE_RepostStatusResponse,
+  BE_BookmarkResponse,
 } from "./backendTypes";
 import { fetchUserById } from "./userService";
 import { getCurrentUser } from "./api";
@@ -373,16 +374,28 @@ export async function getUserPosts(userId: string): Promise<Post[]> {
 }
 
 export async function getBookmarkedPosts(): Promise<Post[]> {
-  const { data } = await apiClient.get<BE_PostResponse[]>("/post/bookmarks", {
-    params: { skip: 0, take: 20 },
-  });
-  const posts = await Promise.all(
-    data.map(async (post) => {
-      const author = await fetchUserById(post.userId);
-      return transformBEPost(post, author);
-    }),
-  );
-  return posts;
+  try {
+    const { data } = await apiClient.get<BE_BookmarkResponse[]>("/post/bookmarks", {
+      params: { skip: 0, take: 20 },
+    });
+    
+    const posts = await Promise.all(
+      data.map(async (bookmark) => {
+        // Backend returns BookmarkDto with nested Post
+        const post = bookmark.post;
+        if (!post) return null;
+        
+        const author = await fetchUserById(post.userId);
+        return transformBEPost(post, author);
+      }),
+    );
+    
+    // Filter out null values (posts without data)
+    return posts.filter((p): p is Post => p !== null);
+  } catch (error) {
+    console.error("[getBookmarkedPosts] Error:", error);
+    return [];
+  }
 }
 
 export async function createPost(
@@ -481,8 +494,23 @@ export async function toggleLike(postId: string, isCurrentlyLiked: boolean): Pro
 }
 
 export async function toggleBookmark(postId: string): Promise<boolean> {
-  await apiClient.post(`/post/${postId}/bookmark`);
-  return true;
+  try {
+    await apiClient.post(`/post/${postId}/bookmark`);
+    return true;
+  } catch (error) {
+    console.error("[toggleBookmark] API error:", error);
+    return false;
+  }
+}
+
+export async function removeBookmark(postId: string): Promise<boolean> {
+  try {
+    await apiClient.delete(`/post/${postId}/bookmark`);
+    return true;
+  } catch (error) {
+    console.error("[removeBookmark] API error:", error);
+    return false;
+  }
 }
 
 export async function addComment(

@@ -227,7 +227,11 @@ export function ModernTabBar({
     (state.routes.length > 0 &&
       state.routes.every((r) => TAB_ROUTE_NAMES.includes(r.name)));
 
-  if (!isTabNavigator) {
+  // Hide tab bar on create screen to give more space for content
+  const currentRoute = state.routes[state.index]?.name;
+  const shouldHideTabBar = currentRoute === 'create';
+
+  if (!isTabNavigator || shouldHideTabBar) {
     return null;
   }
 

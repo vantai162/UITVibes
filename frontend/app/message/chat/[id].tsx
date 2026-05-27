@@ -365,6 +365,7 @@ export default function ChatScreen() {
           </View>
           <View style={[styles.msgMeta, mine && styles.msgMetaMine]}>
             <Text style={styles.msgTime}>
+              {item.editedAt ? 'Edited - ' : ''}
               {formatDistanceToNow(new Date(item.createdAt))}
             </Text>
           </View>

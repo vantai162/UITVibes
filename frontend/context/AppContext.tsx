@@ -129,6 +129,8 @@ interface AppContextType {
   markMessagesRead: (conversationId: string) => Promise<void>;
   markConversationAsRead: (conversationId: string) => Promise<void>;
   startConversation: (userId: string) => Promise<Conversation | null>;
+  createGroup: (name: string, memberUserIds: string[]) => Promise<Conversation>;
+  addGroupMember: (conversationId: string, targetUserId: string) => Promise<Conversation | null>;
 
   // Typing
   partnerTyping: boolean;
@@ -995,6 +997,37 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 );
 
   // ─── Notifications ───────────────────────────────────────
+  const createGroup = useCallback(
+    async (name: string, memberUserIds: string[]) => {
+      const conv = await api.createGroupConversation(name, memberUserIds);
+      setConversations((prev) => {
+        const withoutExisting = prev.filter((c) => c.id !== conv.id);
+        return [conv, ...withoutExisting];
+      });
+      setActiveConversation(conv);
+      return conv;
+    },
+    [],
+  );
+
+  const addGroupMember = useCallback(
+    async (conversationId: string, targetUserId: string) => {
+      await api.addMemberToGroup(conversationId, targetUserId);
+      const updated = await api.getConversationById(conversationId);
+      if (!updated) return null;
+
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? updated : conv)),
+      );
+      setActiveConversation((prev) =>
+        prev?.id === conversationId ? updated : prev,
+      );
+      setConversationMembers(updated.members);
+      return updated;
+    },
+    [],
+  );
+
   const refreshNotifications = useCallback(async () => {
     try {
       const [notifs, count] = await Promise.all([
@@ -1303,6 +1336,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         markMessagesRead,
         markConversationAsRead,
         startConversation,
+        createGroup,
+        addGroupMember,
         partnerTyping,
         notifications,
         unreadCount,

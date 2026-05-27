@@ -395,6 +395,7 @@ export interface BE_AdminUserProfile {
   fullName: string;
   gender: string;
   isActive: boolean;
+  isBanned: boolean;
   isVerified: boolean;
   createdAt: string;
   followersCount: number;

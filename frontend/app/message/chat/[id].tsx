@@ -41,7 +41,7 @@ import { OnlineIndicator } from '../../../components/OnlineIndicator';
 import { MessageContextMenu } from '../../../components/MessageContextMenu';
 import { EditMessageModal } from '../../../components/EditMessageModal';
 import { formatDistanceToNow } from '../../../utils/time';
-import { AppColors, layoutPadding } from '../../../constants/theme';
+import { AppColors, borderRadius, layoutPadding } from '../../../constants/theme';
 import { Typography } from '../../../constants/typography';
 
 export default function ChatScreen() {
@@ -94,6 +94,11 @@ export default function ChatScreen() {
   const [addingMemberId, setAddingMemberId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<
+    | { type: 'remove'; member: any }
+    | { type: 'leave' }
+    | null
+  >(null);
 
   // Find the conversation from the global list by id
   const conversation = conversations.find((c) => c.id === id) ?? null;
@@ -222,69 +227,53 @@ export default function ChatScreen() {
 
   const handleRemoveMember = useCallback(
     (member: any) => {
-      if (!conversation) return;
-      const memberName = member.displayName || member.username || 'this member';
+      setConfirmAction({ type: 'remove', member });
+    },
+    [],
+  );
 
-      Alert.alert(
-        'Remove member',
-        `Remove ${memberName} from this group?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              setRemovingMemberId(member.id);
-              try {
-                const updated = await removeGroupMember(conversation.id, member.id);
-                if (updated) setConvMembers(updated.members);
-                await refreshConversations();
-              } catch (err: any) {
-                Alert.alert(
-                  'Error',
-                  err?.response?.data?.message ?? err?.message ?? 'Failed to remove member.',
-                );
-              } finally {
-                setRemovingMemberId(null);
-              }
-            },
-          },
-        ],
-      );
+  const performRemoveMember = useCallback(
+    async (member: any) => {
+      if (!conversation) return;
+      setRemovingMemberId(member.id);
+      try {
+        const updated = await removeGroupMember(conversation.id, member.id);
+        if (updated) setConvMembers(updated.members);
+        await refreshConversations();
+        setConfirmAction(null);
+      } catch (err: any) {
+        Alert.alert(
+          'Error',
+          err?.response?.data?.message ?? err?.message ?? 'Failed to remove member.',
+        );
+      } finally {
+        setRemovingMemberId(null);
+      }
     },
     [conversation, refreshConversations, removeGroupMember],
   );
 
   const handleLeaveGroup = useCallback(() => {
-    if (!conversation) return;
+    setConfirmAction({ type: 'leave' });
+  }, []);
 
-    Alert.alert(
-      'Leave group',
-      'You will stop receiving messages from this group.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Leave',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLeavingGroup(true);
-            try {
-              await leaveGroupConversation(conversation.id);
-              await refreshConversations();
-              setShowGroupSettings(false);
-              router.back();
-            } catch (err: any) {
-              Alert.alert(
-                'Error',
-                err?.response?.data?.message ?? err?.message ?? 'Failed to leave group.',
-              );
-            } finally {
-              setIsLeavingGroup(false);
-            }
-          },
-        },
-      ],
-    );
+  const performLeaveGroup = useCallback(async () => {
+    if (!conversation) return;
+    setIsLeavingGroup(true);
+    try {
+      await leaveGroupConversation(conversation.id);
+      await refreshConversations();
+      setConfirmAction(null);
+      setShowGroupSettings(false);
+      router.back();
+    } catch (err: any) {
+      Alert.alert(
+        'Error',
+        err?.response?.data?.message ?? err?.message ?? 'Failed to leave group.',
+      );
+    } finally {
+      setIsLeavingGroup(false);
+    }
   }, [conversation, leaveGroupConversation, refreshConversations, router]);
 
   const handleSendDirect = useCallback(
@@ -762,6 +751,70 @@ export default function ChatScreen() {
           </View>
         </Modal>
       )}
+
+      <Modal
+        visible={confirmAction != null}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (!removingMemberId && !isLeavingGroup) setConfirmAction(null);
+        }}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconWrap}>
+              <Feather
+                name={confirmAction?.type === 'remove' ? 'user-minus' : 'log-out'}
+                size={24}
+                color={AppColors.error}
+              />
+            </View>
+            <Text style={styles.confirmTitle}>
+              {confirmAction?.type === 'remove' ? 'Remove member?' : 'Leave group?'}
+            </Text>
+            <Text style={styles.confirmHint}>
+              {confirmAction?.type === 'remove'
+                ? `Remove ${
+                    confirmAction.member.displayName ||
+                    confirmAction.member.username ||
+                    'this member'
+                  } from this group?`
+                : 'You will stop receiving messages from this group.'}
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnSecondary}
+                onPress={() => setConfirmAction(null)}
+                disabled={removingMemberId != null || isLeavingGroup}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtnDanger}
+                onPress={() => {
+                  if (confirmAction?.type === 'remove') {
+                    void performRemoveMember(confirmAction.member);
+                    return;
+                  }
+                  void performLeaveGroup();
+                }}
+                disabled={removingMemberId != null || isLeavingGroup}
+                activeOpacity={0.8}
+              >
+                {removingMemberId != null || isLeavingGroup ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.confirmBtnDangerText}>
+                    {confirmAction?.type === 'remove' ? 'Remove' : 'Leave'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -926,6 +979,77 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     textAlign: 'center',
     paddingVertical: 32,
+  },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: AppColors.surfaceElevated,
+    borderRadius: borderRadius.xl,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  confirmIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${AppColors.error}18`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    ...Typography.screenTitle,
+    color: AppColors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmHint: {
+    ...Typography.body,
+    color: AppColors.textMuted,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmBtnSecondary: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: AppColors.background,
+    borderWidth: 1.5,
+    borderColor: AppColors.border,
+  },
+  confirmBtnSecondaryText: {
+    ...Typography.bodySemibold,
+    color: AppColors.textSecondary,
+  },
+  confirmBtnDanger: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: AppColors.error,
+  },
+  confirmBtnDangerText: {
+    ...Typography.bodySemibold,
+    color: '#fff',
   },
   centerState: {
     flex: 1,

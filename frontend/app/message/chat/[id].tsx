@@ -64,6 +64,8 @@ export default function ChatScreen() {
     editMessage,
     deleteMessage,
     addGroupMember,
+    removeGroupMember,
+    leaveGroupConversation,
     refreshConversations,
   } = useApp();
 
@@ -90,6 +92,8 @@ export default function ChatScreen() {
   const [friendSearch, setFriendSearch] = useState('');
   const [isLoadingFriends, setIsLoadingFriends] = useState(false);
   const [addingMemberId, setAddingMemberId] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [isLeavingGroup, setIsLeavingGroup] = useState(false);
 
   // Find the conversation from the global list by id
   const conversation = conversations.find((c) => c.id === id) ?? null;
@@ -215,6 +219,73 @@ export default function ChatScreen() {
     },
     [addGroupMember, conversation, refreshConversations],
   );
+
+  const handleRemoveMember = useCallback(
+    (member: any) => {
+      if (!conversation) return;
+      const memberName = member.displayName || member.username || 'this member';
+
+      Alert.alert(
+        'Remove member',
+        `Remove ${memberName} from this group?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              setRemovingMemberId(member.id);
+              try {
+                const updated = await removeGroupMember(conversation.id, member.id);
+                if (updated) setConvMembers(updated.members);
+                await refreshConversations();
+              } catch (err: any) {
+                Alert.alert(
+                  'Error',
+                  err?.response?.data?.message ?? err?.message ?? 'Failed to remove member.',
+                );
+              } finally {
+                setRemovingMemberId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [conversation, refreshConversations, removeGroupMember],
+  );
+
+  const handleLeaveGroup = useCallback(() => {
+    if (!conversation) return;
+
+    Alert.alert(
+      'Leave group',
+      'You will stop receiving messages from this group.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLeavingGroup(true);
+            try {
+              await leaveGroupConversation(conversation.id);
+              await refreshConversations();
+              setShowGroupSettings(false);
+              router.back();
+            } catch (err: any) {
+              Alert.alert(
+                'Error',
+                err?.response?.data?.message ?? err?.message ?? 'Failed to leave group.',
+              );
+            } finally {
+              setIsLeavingGroup(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [conversation, leaveGroupConversation, refreshConversations, router]);
 
   const handleSendDirect = useCallback(
     async (text: string) => {
@@ -549,6 +620,8 @@ export default function ChatScreen() {
                 {convMembers.map((member) => {
                   const memberIsAdmin = conversation.adminIds?.includes(member.id) ?? false;
                   const isSelf = member.id === currentUser?.id;
+                  const canRemoveMember = isAdmin && !isSelf;
+                  const isRemoving = removingMemberId === member.id;
                   return (
                     <View key={member.id} style={styles.memberRow}>
                       <Avatar
@@ -564,22 +637,52 @@ export default function ChatScreen() {
                           {memberIsAdmin ? <Text style={styles.memberAdmin}> - Admin</Text> : null}
                         </Text>
                       </View>
+                      {canRemoveMember && (
+                        <TouchableOpacity
+                          style={styles.removeMemberBtn}
+                          onPress={() => handleRemoveMember(member)}
+                          disabled={removingMemberId != null || isLeavingGroup}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {isRemoving ? (
+                            <ActivityIndicator size="small" color="#dc3545" />
+                          ) : (
+                            <Feather name="user-minus" size={20} color="#dc3545" strokeWidth={2} />
+                          )}
+                        </TouchableOpacity>
+                      )}
                     </View>
                   );
                 })}
-                {isAdmin && (
+                <View style={styles.settingsActions}>
+                  {isAdmin && (
+                    <TouchableOpacity
+                      style={styles.actionRow}
+                      onPress={() => {
+                        setFriendSearch('');
+                        setShowAddMember(true);
+                      }}
+                      disabled={isLeavingGroup}
+                    >
+                      <Feather name="user-plus" size={20} color={AppColors.text} strokeWidth={2} />
+                      <Text style={styles.actionText}>Add member</Text>
+                      <Feather name="chevron-right" size={20} color={AppColors.textMuted} strokeWidth={2} />
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity
                     style={styles.actionRow}
-                    onPress={() => {
-                      setFriendSearch('');
-                      setShowAddMember(true);
-                    }}
+                    onPress={handleLeaveGroup}
+                    disabled={isLeavingGroup || removingMemberId != null}
                   >
-                    <Feather name="user-plus" size={20} color={AppColors.text} strokeWidth={2} />
-                    <Text style={styles.actionText}>Add member</Text>
-                    <Feather name="chevron-right" size={20} color={AppColors.textMuted} strokeWidth={2} />
+                    {isLeavingGroup ? (
+                      <ActivityIndicator size="small" color="#dc3545" />
+                    ) : (
+                      <Feather name="log-out" size={20} color="#dc3545" strokeWidth={2} />
+                    )}
+                    <Text style={styles.leaveGroupText}>Leave group</Text>
                   </TouchableOpacity>
-                )}
+                </View>
               </ScrollView>
             </View>
           </View>
@@ -776,6 +879,12 @@ const styles = StyleSheet.create({
     color: AppColors.primary,
     fontWeight: '400',
   },
+  removeMemberBtn: {
+    padding: 8,
+  },
+  settingsActions: {
+    marginTop: 12,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -789,6 +898,11 @@ const styles = StyleSheet.create({
     ...Typography.body,
     flex: 1,
     color: AppColors.text,
+  },
+  leaveGroupText: {
+    ...Typography.body,
+    flex: 1,
+    color: '#dc3545',
   },
   friendSearchContainer: {
     flexDirection: 'row',

@@ -131,6 +131,8 @@ interface AppContextType {
   startConversation: (userId: string) => Promise<Conversation | null>;
   createGroup: (name: string, memberUserIds: string[]) => Promise<Conversation>;
   addGroupMember: (conversationId: string, targetUserId: string) => Promise<Conversation | null>;
+  removeGroupMember: (conversationId: string, targetUserId: string) => Promise<Conversation | null>;
+  leaveGroupConversation: (conversationId: string) => Promise<void>;
 
   // Typing
   partnerTyping: boolean;
@@ -1028,6 +1030,35 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     [],
   );
 
+  const removeGroupMember = useCallback(
+    async (conversationId: string, targetUserId: string) => {
+      await api.removeMemberFromGroup(conversationId, targetUserId);
+      const updated = await api.getConversationById(conversationId);
+      if (!updated) return null;
+
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? updated : conv)),
+      );
+      setActiveConversation((prev) =>
+        prev?.id === conversationId ? updated : prev,
+      );
+      setConversationMembers(updated.members);
+      return updated;
+    },
+    [],
+  );
+
+  const leaveGroupConversation = useCallback(
+    async (conversationId: string) => {
+      await api.leaveGroup(conversationId);
+      setConversations((prev) => prev.filter((conv) => conv.id !== conversationId));
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+      setConversationMembers([]);
+      setMessages([]);
+    },
+    [],
+  );
+
   const refreshNotifications = useCallback(async () => {
     try {
       const [notifs, count] = await Promise.all([
@@ -1338,6 +1369,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         startConversation,
         createGroup,
         addGroupMember,
+        removeGroupMember,
+        leaveGroupConversation,
         partnerTyping,
         notifications,
         unreadCount,

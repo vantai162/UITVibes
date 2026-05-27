@@ -28,11 +28,13 @@ import { Header } from "../../components";
 import { Avatar } from "../../components/Avatar";
 import { OnlineIndicator } from "../../components/OnlineIndicator";
 import { OnlineFriendsList } from "../../components/OnlineFriendsList";
+import { TAB_BAR_BOTTOM_OFFSET } from "../../components/ModernTabBar";
 import { formatDistanceToNow } from "../../utils/time";
 
 export default function MessageScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const sheetContentBottomPadding = TAB_BAR_BOTTOM_OFFSET + Math.max(insets.bottom, 0) + 20;
   const {
     currentUser,
     conversations,
@@ -865,7 +867,7 @@ export default function MessageScreen() {
                   </Text>
                 )
               }
-              contentContainerStyle={{ paddingBottom: 16 }}
+              contentContainerStyle={{ paddingBottom: sheetContentBottomPadding }}
               showsVerticalScrollIndicator={false}
             />
           </View>
@@ -975,13 +977,14 @@ export default function MessageScreen() {
                   </TouchableOpacity>
                 )
               }
-              contentContainerStyle={{ paddingBottom: 16 }}
+              contentContainerStyle={{ paddingBottom: sheetContentBottomPadding }}
               showsVerticalScrollIndicator={false}
             />
 
             <TouchableOpacity
               style={[
                 styles.createGroupBtn,
+                { marginBottom: sheetContentBottomPadding },
                 (!groupName.trim() || selectedMembers.length < 2 || isCreatingGroup) &&
                   styles.createGroupBtnDisabled,
               ]}
@@ -1224,7 +1227,7 @@ function AddMemberSheet({
               </Text>
             )
           }
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: TAB_BAR_BOTTOM_OFFSET + 20 }}
           showsVerticalScrollIndicator={false}
         />
       </View>

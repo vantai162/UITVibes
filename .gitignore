@@ -5,6 +5,9 @@
 /Backend/UITVibes-Microservices.AppHost/appsettings.json
 .github
 /.vs
+.claude
+AGENTS.md
+CLAUDE.md
 /Backend/AuthService/AuthService.csproj.lscache
 /Backend/MessageService/MessageService.csproj.lscache
 /Backend/NotificationService/NotificationService.csproj.lscache

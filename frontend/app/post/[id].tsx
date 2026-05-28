@@ -18,16 +18,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { getPostById, toggleCommentLike, repostPost, undoRepost } from "../../services/postService";
+import { getPostById, toggleCommentLike, repostPost, undoRepost, toggleBookmark, removeBookmark } from "../../services/postService";
 import { Post, Comment } from "../../data/mockData";
 import { Avatar, CommentItem, ImageCarousel } from "../../components";
 import { CommentContextMenu, DeleteConfirmModal } from "../../components";
 import { useApp } from "../../context/AppContext";
-import { AppColors } from "../../constants/theme";
+import { AppColors, layoutPadding } from "../../constants/theme";
 import { SkeletonShimmer } from "../../components/SkeletonLoader";
 import { updateComment, deleteComment } from "../../services/postService";
 import { CommentInput } from "../../components/CommentInput";
-import { ScreenHeader } from "../../components/ScreenHeader";
+import { CompactHeader } from "../../components/StaticPremiumHeader";
 
 // ─── Skeleton for initial load ────────────────────────────────────────────────
 const PostDetailSkeleton = () => (
@@ -81,6 +81,7 @@ export default function PostDetailScreen() {
   const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
   const [localReposted, setLocalReposted] = useState(false);
   const [localRepostCount, setLocalRepostCount] = useState(0);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export default function PostDetailScreen() {
       setIsFollowingAuthor(!!data.user.isFollowing);
       setLocalReposted(data.isReposted ?? false);
       setLocalRepostCount(data.repostCount ?? 0);
+      setIsBookmarked(data.isBookmarked ?? false);
     }
     setIsLoading(false);
   };
@@ -341,13 +343,35 @@ export default function PostDetailScreen() {
     });
   };
 
+  const getVisibilityMeta = (visibility?: string) => {
+    const normalized = (visibility ?? "").toLowerCase();
+    if (normalized === "followers") return { label: "Followers", icon: "users" as const };
+    if (normalized === "private") return { label: "Private", icon: "lock" as const };
+    if (normalized === "hidden") return { label: "Hidden", icon: "eye-off" as const };
+    return { label: "Public", icon: "globe" as const };
+  };
+
+  const handleBookmarkToggle = async () => {
+    try {
+      if (isBookmarked) {
+        await removeBookmark(post.id);
+        setIsBookmarked(false);
+      } else {
+        await toggleBookmark(post.id);
+        setIsBookmarked(true);
+      }
+    } catch (error) {
+      console.error("[PostDetail] Failed to toggle bookmark:", error);
+    }
+  };
+
   if (isLoading || !post) {
     return <PostDetailSkeleton />;
   }
 
   const renderHeader = () => (
     <>
-      <ScreenHeader title="Post" onBack={() => router.back()} />
+      <CompactHeader title="Post" showBack onBack={() => router.back()} />
 
       {/* Post Header: User Info */}
       <View style={styles.postHeader}>
@@ -360,7 +384,20 @@ export default function PostDetailScreen() {
             <Text style={styles.username}>
               {post.user.fullName || post.user.displayName}
             </Text>
-            <Text style={styles.userHandle}>@{post.user.username}</Text>
+            <Text style={styles.userHandle}>@{post.user.displayName || post.user.username}</Text>
+            <View style={styles.metaRow}>
+              {(() => {
+                const visibilityMeta = getVisibilityMeta(post.visibility);
+                return (
+                  <>
+                    <Feather name={visibilityMeta.icon} size={12} color={AppColors.textSecondary} />
+                    <Text style={styles.visibilityText}>{visibilityMeta.label}</Text>
+                  </>
+                );
+              })()}
+              <Text style={styles.metaSeparator}>•</Text>
+              <Text style={styles.timestamp}>{formatDate(post.createdAt)}</Text>
+            </View>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -425,8 +462,8 @@ export default function PostDetailScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.bookmarkGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Feather name="bookmark" size={24} color={AppColors.iconMuted} strokeWidth={2} />
+        <TouchableOpacity style={styles.bookmarkGroup} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} onPress={handleBookmarkToggle}>
+          <Feather name="bookmark" size={24} color={isBookmarked ? AppColors.primary : AppColors.iconMuted} fill={isBookmarked ? AppColors.primary : 'transparent'} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
@@ -438,7 +475,6 @@ export default function PostDetailScreen() {
           </Text>{" "}
           {post.caption}
         </Text>
-        <Text style={styles.timestamp}>{formatDate(post.createdAt)}</Text>
       </View>
 
       {/* Comments Header */}
@@ -511,7 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
   },
   userInfoRow: {
@@ -557,7 +593,7 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 14,
     gap: 20,
   },
@@ -577,10 +613,15 @@ const styles = StyleSheet.create({
     color: AppColors.iconMuted,
   },
   captionContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.border,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   caption: {
     fontSize: 14,
@@ -591,12 +632,21 @@ const styles = StyleSheet.create({
   captionUsername: {
     fontWeight: "600",
   },
+  visibilityText: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+  },
+  metaSeparator: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+    marginHorizontal: 4,
+  },
   timestamp: {
     fontSize: 12,
     color: AppColors.textSecondary,
   },
   commentsHeader: {
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
     color: AppColors.textSecondary,
     fontSize: 13,

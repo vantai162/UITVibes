@@ -1,16 +1,65 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppProvider } from '@/context/AppContext';
 import { AppColors } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
+import { ToastProvider } from '@/components/EnhancedToast';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+function AuthGuard() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { isAuthenticated, isLoading, isNewUser, currentUser } = useApp();
+
+  useEffect(() => {
+    console.log('[AuthGuard] Running - isLoading:', isLoading, 'isAuth:', isAuthenticated, 'role:', currentUser?.role, 'segments:', segments);
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === 'auth';
+    const inAdminGroup = segments[0] === 'admin';
+
+    // Chưa đăng nhập → login
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    // Đã đăng nhập nhưng vào auth pages → home hoặc admin dashboard
+    // Allow onboarding pages for new users (isNewUser=true means onboarding not complete)
+    if (isAuthenticated && inAuthGroup && !isNewUser) {
+      if (currentUser?.role === 'Admin') {
+        router.replace('/admin/dashboard');
+      } else {
+        router.replace('/(tabs)/home');
+      }
+      return;
+    }
+
+    // Đã đăng nhập và vào trang chủ → nếu là Admin thì redirect sang admin dashboard
+    const inTabsGroup = segments[0] === '(tabs)';
+    if (isAuthenticated && inTabsGroup && currentUser?.role === 'Admin') {
+      router.replace('/admin/dashboard');
+      return;
+    }
+
+    // Vào admin route nhưng không phải Admin → home
+    if (inAdminGroup && currentUser?.role !== 'Admin') {
+      console.log('[AuthGuard] Non-admin trying to access admin, redirecting...');
+      router.replace('/(tabs)/home');
+    }
+  }, [isAuthenticated, isLoading, segments, router, currentUser, isNewUser]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -18,7 +67,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AppProvider>
+      <AppProvider>
+        <ToastProvider>
+          <AuthGuard />
           <Stack
           screenOptions={{
             contentStyle: { backgroundColor: AppColors.background },
@@ -53,7 +104,8 @@ export default function RootLayout() {
           <Stack.Screen name="admin/users" options={{ headerShown: false }} />
           <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
         </Stack>
-        <StatusBar style="auto" />
+        <StatusBar style="dark" />
+        </ToastProvider>
       </AppProvider>
     </ThemeProvider>
     </GestureHandlerRootView>

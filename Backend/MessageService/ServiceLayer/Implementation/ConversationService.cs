@@ -10,17 +10,25 @@ namespace MessageService.ServiceLayer.Implementation
         private readonly MessageDbContext _context;
         private readonly ILogger<ConversationService> _logger;
         private readonly IUserProfileRpcClient _userProfileRpcClient;
+        private readonly IFriendListRpcClient _friendListRpcClient;
 
-        public ConversationService(MessageDbContext context, ILogger<ConversationService> logger, IUserProfileRpcClient userProfileRpcClient)
+        public ConversationService(
+            MessageDbContext context,
+            ILogger<ConversationService> logger,
+            IUserProfileRpcClient userProfileRpcClient,
+            IFriendListRpcClient friendListRpcClient)
         {
             _context = context;
             _logger = logger;
             _userProfileRpcClient = userProfileRpcClient;
+            _friendListRpcClient = friendListRpcClient;
         }
 
         public async Task AddMemberToGroupAsync(Guid conversationId, Guid userId, Guid targetUserId)
         {
+            // Load conversation just for validation, then detach to avoid EF tracking conflicts
             var conversation = await _context.Conversations
+                .AsNoTracking()
                 .Include(c => c.Members)
                 .FirstOrDefaultAsync(c => c.Id == conversationId && !c.IsDeleted);
 
@@ -34,10 +42,25 @@ namespace MessageService.ServiceLayer.Implementation
             if (currentMember == null || currentMember.Role == MemberRole.Member)
                 throw new UnauthorizedAccessException("Only admins/owners can add members");
 
+            if (targetUserId == userId)
+                throw new ArgumentException("Cannot add yourself to the group");
+
             if (conversation.Members.Any(m => m.UserId == targetUserId && m.LeftAt == null))
                 throw new InvalidOperationException("User is already a member");
 
-            conversation.Members.Add(new ConversationMember
+            await EnsureFriendsAsync(userId, new[] { targetUserId });
+
+            // Detach conversation so EF won't try to UPDATE it when we add a member
+            _context.Entry(conversation).State = EntityState.Detached;
+
+            // Check again with a fresh query to avoid race conditions
+            var alreadyMember = await _context.ConversationMembers
+                .AsNoTracking()
+                .AnyAsync(m => m.ConversationId == conversationId && m.UserId == targetUserId && m.LeftAt == null);
+            if (alreadyMember)
+                throw new InvalidOperationException("User is already a member");
+
+            var newMember = new ConversationMember
             {
                 Id = Guid.NewGuid(),
                 ConversationId = conversationId,
@@ -45,9 +68,17 @@ namespace MessageService.ServiceLayer.Implementation
                 Role = MemberRole.Member,
                 JoinedAt = DateTime.UtcNow,
                 LastReadAt = DateTime.UtcNow,
-            });
+            };
+            _context.ConversationMembers.Add(newMember);
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new InvalidOperationException("Failed to add member due to a conflict. Please try again.");
+            }
 
             _logger.LogInformation("User {TargetUserId} added to conversation {ConversationId} by {UserId}",
                 targetUserId, conversationId, userId);
@@ -58,8 +89,15 @@ namespace MessageService.ServiceLayer.Implementation
             if (string.IsNullOrWhiteSpace(request.Name))
                 throw new ArgumentException("Group name is required");
 
-            if (request.MemberUserIds.Count < 1)
-                throw new ArgumentException("Group must have at least one other member");
+            var invitedMemberIds = request.MemberUserIds
+                .Where(memberId => memberId != Guid.Empty && memberId != userId)
+                .Distinct()
+                .ToList();
+
+            if (invitedMemberIds.Count < 2)
+                throw new ArgumentException("Group chat must include at least 3 members");
+
+            await EnsureFriendsAsync(userId, invitedMemberIds);
 
             var conversation = new Conversation
             {
@@ -83,10 +121,8 @@ namespace MessageService.ServiceLayer.Implementation
             });
 
             // Add other members
-            foreach (var memberId in request.MemberUserIds.Distinct())
+            foreach (var memberId in invitedMemberIds)
             {
-                if (memberId == userId) continue;
-
                 conversation.Members.Add(new ConversationMember
                 {
                     Id = Guid.NewGuid(),
@@ -271,6 +307,25 @@ namespace MessageService.ServiceLayer.Implementation
             _logger.LogInformation("User {TargetUserId} removed from conversation {ConversationId} by {UserId}",
                 targetUserId, conversationId, userId);
         }
+
+        private async Task EnsureFriendsAsync(Guid userId, IEnumerable<Guid> targetUserIds)
+        {
+            var requestedIds = targetUserIds.Distinct().ToList();
+            if (requestedIds.Count == 0) return;
+
+            var friends = await _friendListRpcClient.GetFriendListAsync(userId, 0, 5000);
+            if (friends == null)
+            {
+                _logger.LogWarning("Friend list RPC returned null for user {UserId}, assuming no friends", userId);
+                throw new UnauthorizedAccessException("Unable to verify friend status. Please try again.");
+            }
+            var friendIds = friends.Select(f => f.UserId).ToHashSet();
+            var nonFriendIds = requestedIds.Where(id => !friendIds.Contains(id)).ToList();
+
+            if (nonFriendIds.Count > 0)
+                throw new UnauthorizedAccessException("Group members must be friends of the current user");
+        }
+
         private async Task<ConversationDto> MapToDtoAsync(
                 Conversation conversation,
                 Guid currentUserId,

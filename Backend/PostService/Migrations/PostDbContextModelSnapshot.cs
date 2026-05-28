@@ -424,6 +424,9 @@ namespace PostService.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AdditionalDetails")
+                        .HasColumnType("text");
+
                     b.Property<string>("AdminNote")
                         .HasColumnType("text");
 

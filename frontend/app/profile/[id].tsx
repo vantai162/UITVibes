@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -13,8 +13,11 @@ import { HighlightBar } from '../../components/highlight';
 import { AppColors, layoutPadding, borderRadius } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { CompactHeader } from '../../components/StaticPremiumHeader';
 import { UserActionsSheet } from '../../components/profile/UserActionsSheet';
 import { blockUser, getBlockStatus, type BlockStatusDto } from '../../services/blockService';
+import { ReportUserSheet } from '../../components/profile/ReportUserSheet';
+import { Toast } from '../../components/Toast';
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -29,6 +32,8 @@ export default function UserProfileScreen() {
   // Highlights state
   const [highlights, setHighlights] = useState<HighlightGroup[]>([]);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [reportToastVisible, setReportToastVisible] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -119,8 +124,13 @@ export default function UserProfileScreen() {
   };
 
   const handleReportUser = () => {
-    // TODO: implement actual report submission
-    console.log('[Report] user:', user.id);
+    setActionsSheetVisible(false);
+    setReportSheetVisible(true);
+  };
+
+  const handleReportSuccess = () => {
+    setReportSheetVisible(false);
+    setReportToastVisible(true);
   };
 
   const formatCount = (count: number | undefined | null): string => {
@@ -143,7 +153,7 @@ export default function UserProfileScreen() {
     if (isBlocked) {
       return (
         <SafeAreaView style={styles.container} edges={['top']}>
-          <ScreenHeader title="Profile" onBack={() => router.back()} />
+          <CompactHeader title="Profile" showBack onBack={() => router.back()} />
           <View style={styles.blockedContainer}>
             <Feather name="slash" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
             <Text style={styles.blockedTitle}>Profile unavailable</Text>
@@ -157,7 +167,7 @@ export default function UserProfileScreen() {
 
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Profile" onBack={() => router.back()} />
+        <CompactHeader title="Profile" showBack onBack={() => router.back()} />
         <View style={styles.notFoundContainer}>
           <Feather name="user-x" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
           <Text style={styles.notFoundText}>User not found</Text>
@@ -169,8 +179,9 @@ export default function UserProfileScreen() {
   return (
     <>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <ScreenHeader
+        <CompactHeader
           title={user.username}
+          showBack
           onBack={() => router.back()}
           rightAction={
             <TouchableOpacity
@@ -287,7 +298,23 @@ export default function UserProfileScreen() {
           onClose={() => setActionsSheetVisible(false)}
           onBlock={handleBlockUser}
           onReport={handleReportUser}
+          reportedUserId={user.id}
           blockedUsername={user.username}
+        />
+
+        <ReportUserSheet
+          visible={reportSheetVisible}
+          reportedDisplayName={user.displayName}
+          reportedUserId={user.id}
+          onClose={() => setReportSheetVisible(false)}
+          onReportSuccess={handleReportSuccess}
+        />
+
+        <Toast
+          visible={reportToastVisible}
+          message="Report submitted. Thanks for helping keep the community safe."
+          type="success"
+          onHide={() => setReportToastVisible(false)}
         />
       </SafeAreaView>
     </>

@@ -20,6 +20,7 @@ import { useOnlineUsers } from '../hooks/useOnlineUsers';
 import { getConnection } from '../services/signalrService';
 import type { BE_MessageResponse } from '../services/backendTypes';
 import { transformBEMessage } from '../services/messageService';
+import type { Reel as APIReel } from '../services/postService';
 
 interface AppContextType {
   // Auth / User
@@ -29,6 +30,7 @@ interface AppContextType {
   markUserActive: () => void;
   login: (email: string, password: string) => Promise<User | null>;
   register: (email: string, password: string, username: string) => Promise<boolean>;
+  confirmPendingAuth: (user: User) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 
@@ -77,9 +79,21 @@ interface AppContextType {
     images: string[],
     caption: string,
     location?: string,
+    visibility?: number,
   ) => Promise<Post | null>;
+  createReel: (videoUri: string, caption: string, duration?: number) => Promise<any>;
   updatePost: (postId: string, caption: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
+
+  // Reels
+  reels: APIReel[];
+  refreshReels: () => Promise<void>;
+  toggleReelLike: (reelId: string, isLiked: boolean) => Promise<void>;
+  toggleReelBookmark: (reelId: string) => Promise<void>;
+  addReelComment: (reelId: string, text: string, parentCommentId?: string) => Promise<void>;
+  deleteReelComment: (commentId: string) => Promise<void>;
+  toggleReelCommentLike: (commentId: string) => Promise<void>;
+  deleteReel: (reelId: string) => Promise<void>;
 
   // User / Follow
   refreshUser: () => Promise<void>;
@@ -115,6 +129,10 @@ interface AppContextType {
   markMessagesRead: (conversationId: string) => Promise<void>;
   markConversationAsRead: (conversationId: string) => Promise<void>;
   startConversation: (userId: string) => Promise<Conversation | null>;
+  createGroup: (name: string, memberUserIds: string[]) => Promise<Conversation>;
+  addGroupMember: (conversationId: string, targetUserId: string) => Promise<Conversation | null>;
+  removeGroupMember: (conversationId: string, targetUserId: string) => Promise<Conversation | null>;
+  leaveGroupConversation: (conversationId: string) => Promise<void>;
 
   // Typing
   partnerTyping: boolean;
@@ -152,6 +170,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // ─── Pending Verification (after register, before OTP verify) ────
+  // Stores user data temporarily so AuthGuard doesn't redirect to home
+  const [pendingAuthUser, setPendingAuthUser] = useState<User | null>(null);
 
   const markUserActive = useCallback(() => setIsNewUser(false), []);
 
@@ -234,9 +256,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setAuthError(null);
       try {
         const user = await api.register(email, password, username);
+        // Store user temporarily for pending verification — do NOT set isAuthenticated yet
+        // This prevents AuthGuard from redirecting to home before OTP verification
+        setPendingAuthUser(user);
         setCurrentUser(user);
-        setIsAuthenticated(true);
-        setIsNewUser(true); // Tài khoản mới → posts = 0
         setOnboardingStep(0);
         return true;
       } catch (error) {
@@ -254,12 +277,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     [],
   );
 
+  // Called from email-verification after OTP is successfully verified
+  const confirmPendingAuth = useCallback((user: User) => {
+    setPendingAuthUser(null);
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setIsNewUser(true); // posts = 0 for new account
+  }, []);
+
   const resetSessionAfterSignOut = useCallback(() => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsNewUser(false);
     setAuthError(null);
     setOnboardingStep(0);
+    setPendingAuthUser(null);
     setPosts([]);
     setStories([]);
     setConversations([]);
@@ -337,6 +369,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [repostedPosts, setRepostedPosts] = useState<Post[]>([]); // Danh sách repost của user hiện tại
   const [lastPostsFetch, setLastPostsFetch] = useState(0); // Timestamp of last successful fetch for stale-while-revalidate
   const [lastStoriesFetch, setLastStoriesFetch] = useState(0);
+
+  // ─── Reels ────────────────────────────────────────────────────────────────
+  const [reels, setReels] = useState<APIReel[]>([]);
 
   // ─── Messages ─────────────────────────────────────────────
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -546,9 +581,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       images: string[],
       caption: string,
       location?: string,
+      visibility?: number,
     ): Promise<Post | null> => {
       try {
-        const newPost = await api.createPost(images, caption, location);
+        const newPost = await api.createPost(images, caption, location, visibility);
         setPosts((prev) => [newPost, ...prev]);
         setMyPosts((prev) => [newPost, ...prev]);
         await refreshMyPosts();
@@ -561,6 +597,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     },
     [refreshMyPosts],
+  );
+
+  const createReel = useCallback(
+    async (videoUri: string, caption: string, duration?: number): Promise<any> => {
+      try {
+        const newReel = await api.createReel(videoUri, caption, duration);
+        return newReel;
+      } catch (error) {
+        console.error("Failed to create reel:", error);
+        throw error;
+      }
+    },
+    [],
   );
 
   const updatePost = useCallback(
@@ -584,6 +633,100 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setCurrentUser((prev) => (prev ? { ...prev, posts: Math.max(0, prev.posts - 1) } : prev));
     } catch (error) {
       console.error("Failed to delete post:", error);
+    }
+  }, []);
+
+  // ─── Reels ─────────────────────────────────────────────────────────────
+  const refreshReels = useCallback(async () => {
+    try {
+      const data = await api.getReels();
+      setReels(data);
+    } catch (error) {
+      console.error("Failed to fetch reels:", error);
+    }
+  }, []);
+
+  const toggleReelLike = useCallback(
+    async (reelId: string, isCurrentlyLiked: boolean) => {
+      // Optimistic update
+      setReels((prev) =>
+        prev.map((reel) => {
+          if (reel.id === reelId) {
+            return {
+              ...reel,
+              isLiked: !isCurrentlyLiked,
+              likeCount: isCurrentlyLiked ? reel.likeCount - 1 : reel.likeCount + 1,
+            };
+          }
+          return reel;
+        }),
+      );
+      try {
+        await api.toggleReelLike(reelId, isCurrentlyLiked);
+      } catch (error) {
+        // Revert on failure
+        await refreshReels();
+        console.error("Failed to toggle reel like:", error);
+      }
+    },
+    [refreshReels],
+  );
+
+  const toggleReelBookmark = useCallback(
+    async (reelId: string) => {
+      const reel = reels.find((r) => r.id === reelId);
+      if (!reel) return;
+
+      // Optimistic update - toggle isBookmarked state
+      setReels((prev) =>
+        prev.map((r) =>
+          r.id === reelId ? { ...r, isBookmarked: !(r as any).isBookmarked } : r,
+        ),
+      );
+      try {
+        await api.toggleReelBookmark(reelId);
+      } catch (error) {
+        // Revert on failure
+        await refreshReels();
+        console.error("Failed to toggle reel bookmark:", error);
+      }
+    },
+    [reels, refreshReels],
+  );
+
+  const addReelComment = useCallback(
+    async (reelId: string, text: string, parentCommentId?: string) => {
+      try {
+        await api.addReelComment(reelId, text, parentCommentId);
+      } catch (error) {
+        console.error("Failed to add reel comment:", error);
+      }
+    },
+    [],
+  );
+
+  const deleteReelComment = useCallback(async (commentId: string) => {
+    try {
+      await api.deleteReelComment(commentId);
+    } catch (error) {
+      console.error("Failed to delete reel comment:", error);
+    }
+  }, []);
+
+  const toggleReelCommentLike = useCallback(async (commentId: string) => {
+    try {
+      await api.toggleReelCommentLike(commentId);
+    } catch (error) {
+      console.error("Failed to toggle reel comment like:", error);
+    }
+  }, []);
+
+  const deleteReelFn = useCallback(async (reelId: string) => {
+    try {
+      await api.deleteReel(reelId);
+      setReels((prev) => prev.filter((r) => r.id !== reelId));
+    } catch (error) {
+      console.error("Failed to delete reel:", error);
     }
   }, []);
 
@@ -763,7 +906,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       try {
         await api.editMessage(conversationId, messageId, text);
         setMessages((prev) =>
-          prev.map((m) => (m.id === messageId ? { ...m, text, isEdited: true } : m))
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, text, editedAt: new Date().toISOString() }
+              : m,
+          )
         );
       } catch (error: any) {
         const msg = error?.response?.data?.message ?? "Failed to edit message.";
@@ -856,6 +1003,66 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 );
 
   // ─── Notifications ───────────────────────────────────────
+  const createGroup = useCallback(
+    async (name: string, memberUserIds: string[]) => {
+      const conv = await api.createGroupConversation(name, memberUserIds);
+      setConversations((prev) => {
+        const withoutExisting = prev.filter((c) => c.id !== conv.id);
+        return [conv, ...withoutExisting];
+      });
+      setActiveConversation(conv);
+      return conv;
+    },
+    [],
+  );
+
+  const addGroupMember = useCallback(
+    async (conversationId: string, targetUserId: string) => {
+      await api.addMemberToGroup(conversationId, targetUserId);
+      const updated = await api.getConversationById(conversationId);
+      if (!updated) return null;
+
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? updated : conv)),
+      );
+      setActiveConversation((prev) =>
+        prev?.id === conversationId ? updated : prev,
+      );
+      setConversationMembers(updated.members);
+      return updated;
+    },
+    [],
+  );
+
+  const removeGroupMember = useCallback(
+    async (conversationId: string, targetUserId: string) => {
+      await api.removeMemberFromGroup(conversationId, targetUserId);
+      const updated = await api.getConversationById(conversationId);
+      if (!updated) return null;
+
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? updated : conv)),
+      );
+      setActiveConversation((prev) =>
+        prev?.id === conversationId ? updated : prev,
+      );
+      setConversationMembers(updated.members);
+      return updated;
+    },
+    [],
+  );
+
+  const leaveGroupConversation = useCallback(
+    async (conversationId: string) => {
+      await api.leaveGroup(conversationId);
+      setConversations((prev) => prev.filter((conv) => conv.id !== conversationId));
+      setActiveConversation((prev) => (prev?.id === conversationId ? null : prev));
+      setConversationMembers([]);
+      setMessages([]);
+    },
+    [],
+  );
+
   const refreshNotifications = useCallback(async () => {
     try {
       const [notifs, count] = await Promise.all([
@@ -910,6 +1117,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             refreshPosts(),
             refreshMyPosts(),
             refreshStories(),
+            refreshReels(),
             refreshConversations(),
             refreshNotifications(),
             fetchSuggestedUsers(),
@@ -920,6 +1128,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           await Promise.all([
             refreshPosts(),
             refreshStories(),
+            refreshReels(),
             refreshConversations(),
             refreshNotifications(),
           ]);
@@ -930,6 +1139,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         await Promise.all([
           refreshPosts(),
           refreshStories(),
+          refreshReels(),
           refreshConversations(),
           refreshNotifications(),
         ]);
@@ -942,6 +1152,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, [
     refreshPosts,
     refreshStories,
+    refreshReels,
     refreshConversations,
     refreshNotifications,
     fetchSuggestedUsers,
@@ -1059,6 +1270,101 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     };
   }, [currentUser]); // only re-register when currentUser changes (login/logout)
 
+  useEffect(() => {
+    const connection = getConnection();
+    if (!connection) return;
+
+    const editedHandler = (messageData: BE_MessageResponse) => {
+      const messageConvId = messageData.conversationId ?? (messageData as any).ConversationId;
+      const messageId = messageData.id ?? (messageData as any).Id;
+      const content = messageData.content ?? (messageData as any).Content ?? "";
+      const editedAt =
+        messageData.editedAt ?? (messageData as any).EditedAt ?? new Date().toISOString();
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId ? { ...message, text: content, editedAt } : message,
+        ),
+      );
+
+      setConversations((prev) =>
+        prev.map((conversation) => {
+          if (conversation.id !== messageConvId) return conversation;
+          if (conversation.lastMessage?.id !== messageId) return conversation;
+          return {
+            ...conversation,
+            lastMessage: conversation.lastMessage
+              ? { ...conversation.lastMessage, text: content, editedAt }
+              : conversation.lastMessage,
+          };
+        }),
+      );
+    };
+
+    const deletedHandler = (data: {
+      conversationId?: string;
+      ConversationId?: string;
+      messageId?: string;
+      MessageId?: string;
+    }) => {
+      const conversationId = data.conversationId ?? data.ConversationId;
+      const messageId = data.messageId ?? data.MessageId;
+      if (!messageId) return;
+
+      setMessages((prev) => prev.filter((message) => message.id !== messageId));
+
+      setConversations((prev) =>
+        prev.map((conversation) => {
+          if (conversation.id !== conversationId) return conversation;
+          if (conversation.lastMessage?.id !== messageId) return conversation;
+          return { ...conversation, lastMessage: undefined };
+        }),
+      );
+    };
+
+    const readHandler = (data: {
+      conversationId?: string;
+      ConversationId?: string;
+      userId?: string;
+      UserId?: string;
+      messageId?: string;
+      MessageId?: string;
+    }) => {
+      const conversationId = data.conversationId ?? data.ConversationId;
+      const readerId = data.userId ?? data.UserId;
+      const messageId = data.messageId ?? data.MessageId;
+      if (!conversationId || !readerId || !messageId) return;
+
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === conversationId && readerId === currentUser?.id
+            ? { ...conversation, unreadCount: 0 }
+            : conversation,
+        ),
+      );
+
+      if (readerId === currentUser?.id) return;
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId && message.senderId === currentUser?.id
+            ? { ...message, isRead: true }
+            : message,
+        ),
+      );
+    };
+
+    connection.on("MessageEdited", editedHandler);
+    connection.on("MessageDeleted", deletedHandler);
+    connection.on("MessagesRead", readHandler);
+
+    return () => {
+      connection.off("MessageEdited", editedHandler);
+      connection.off("MessageDeleted", deletedHandler);
+      connection.off("MessagesRead", readHandler);
+    };
+  }, [currentUser?.id]);
+
   // ─── Listen to SignalR UserTyping events ──────────────────
   useEffect(() => {
     const connection = getConnection();
@@ -1094,6 +1400,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         markUserActive,
         login,
         register,
+        confirmPendingAuth,
         logout,
         deleteAccount,
         isAuthenticated,
@@ -1122,8 +1429,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         addComment,
         deleteComment,
         createPost,
+        createReel,
         updatePost,
         deletePost,
+        // Reels
+        reels,
+        refreshReels,
+        toggleReelLike,
+        toggleReelBookmark,
+        addReelComment,
+        deleteReelComment,
+        toggleReelCommentLike,
+        deleteReel: deleteReelFn,
         refreshUser,
         toggleFollow,
         updateProfile,
@@ -1149,6 +1466,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         markMessagesRead,
         markConversationAsRead,
         startConversation,
+        createGroup,
+        addGroupMember,
+        removeGroupMember,
+        leaveGroupConversation,
         partnerTyping,
         notifications,
         unreadCount,

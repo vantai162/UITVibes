@@ -1,7 +1,7 @@
 /**
  * ReportsScreen — Admin view of user & post reports
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   resolvePostReport,
   rejectUserReport,
   rejectPostReport,
+  changePostVisibility,
 } from "@/services/adminService";
 import type {
   BE_UserReport,
@@ -36,7 +37,7 @@ type FilterStatus = AdminReportStatus | "All";
 const STATUS_COLORS: Record<AdminReportStatus, string> = {
   Pending: "#F59E0B",
   Resolved: "#22C55E",
-  Rejected: "#EF4444",
+  Dismissed: "#9CA3AF",
 };
 
 const TabButton: React.FC<{
@@ -63,7 +64,7 @@ const FilterChips: React.FC<{
   active: FilterStatus;
   onChange: (s: FilterStatus) => void;
 }> = ({ active, onChange }) => {
-  const options: FilterStatus[] = ["All", "Pending", "Resolved", "Rejected"];
+  const options: FilterStatus[] = ["All", "Pending", "Resolved", "Dismissed"];
   return (
     <View style={styles.chips}>
       {options.map((s) => (
@@ -120,6 +121,12 @@ function UserReportCard({
         <Feather name="flag" size={12} color={AppColors.textMuted} />
         <Text style={styles.reasonText}>{report.reason}</Text>
       </View>
+      {report.additionalDetails ? (
+        <View style={styles.noteRow}>
+          <Feather name="align-left" size={12} color={AppColors.textMuted} />
+          <Text style={styles.noteText}>{report.additionalDetails}</Text>
+        </View>
+      ) : null}
       {report.adminNote ? (
         <View style={styles.noteRow}>
           <Feather name="message-square" size={12} color={AppColors.textMuted} />
@@ -166,10 +173,14 @@ function PostReportCard({
   report,
   onResolve,
   onReject,
+  onHidePost,
+  isHiding,
 }: {
   report: BE_PostReport;
   onResolve: () => void;
   onReject: () => void;
+  onHidePost: () => void;
+  isHiding: boolean;
 }) {
   const statusColor = STATUS_COLORS[report.status];
 
@@ -205,29 +216,23 @@ function PostReportCard({
       {report.status === "Pending" && (
         <View style={styles.cardActions}>
           <TouchableOpacity
+            style={styles.btnHide}
+            onPress={onHidePost}
+            disabled={isHiding}
+          >
+            <Feather name="eye-off" size={14} color="#F59E0B" />
+            <Text style={styles.btnHideText}>{isHiding ? "Hiding..." : "Hide Post"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.btnReject}
-            onPress={() =>
-              Alert.alert("Reject Report", "Mark this report as invalid?", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Reject", style: "destructive", onPress: onReject },
-              ])
-            }
+            onPress={onReject}
           >
             <Feather name="x" size={14} color="#EF4444" />
             <Text style={styles.btnRejectText}>Reject</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnResolve}
-            onPress={() =>
-              Alert.alert(
-                "Resolve Report",
-                "Dismiss this post report?",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Resolve", onPress: onResolve },
-                ],
-              )
-            }
+            onPress={onResolve}
           >
             <Feather name="check" size={14} color="#22C55E" />
             <Text style={styles.btnResolveText}>Resolve</Text>
@@ -252,8 +257,15 @@ export default function ReportsScreen() {
 
   const PAGE_SIZE = 20;
 
+  // Stable ref so callbacks always call the latest fetchReports
+  const fetchReportsRef = useRef<(pageNum: number, isRefresh: boolean) => Promise<void>>();
+  const isFetchingRef = useRef(false);
+
   const fetchReports = useCallback(
     async (pageNum: number, isRefresh = false) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+
       try {
         const status = filter === "All" ? undefined : filter;
         const [u, p] = await Promise.all([
@@ -271,6 +283,7 @@ export default function ReportsScreen() {
       } catch (err) {
         console.error("[AdminReports] fetchReports failed:", err);
       } finally {
+        isFetchingRef.current = false;
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -279,28 +292,34 @@ export default function ReportsScreen() {
     [filter],
   );
 
+  // Keep the ref in sync with the latest fetchReports
+  fetchReportsRef.current = fetchReports;
+
   useEffect(() => {
+    if (isFetchingRef.current) return;
     setLoading(true);
     setPage(0);
     setHasMore(true);
     fetchReports(0, true);
-  }, [fetchReports]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   const onRefresh = () => {
+    if (isFetchingRef.current) return;
     setRefreshing(true);
     setPage(0);
+    setHasMore(false);
     fetchReports(0, true);
   };
 
   const onEndReached = () => {
-    if (!loadingMore && hasMore) {
-      setLoadingMore(true);
-      setPage((p) => {
-        const next = p + 1;
-        fetchReports(next, false);
-        return next;
-      });
-    }
+    if (isFetchingRef.current || loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    setPage((p) => {
+      const next = p + 1;
+      fetchReports(next, false);
+      return next;
+    });
   };
 
   const handleResolve = async (reportId: string, isUser: boolean) => {
@@ -330,18 +349,35 @@ export default function ReportsScreen() {
       if (isUser) {
         await rejectUserReport(reportId);
         setUserReports((prev) =>
-          prev.map((r) => (r.id === reportId ? { ...r, status: "Rejected" as AdminReportStatus } : r)),
+          prev.map((r) => (r.id === reportId ? { ...r, status: "Dismissed" as AdminReportStatus } : r)),
         );
       } else {
         await rejectPostReport(reportId);
         setPostReports((prev) =>
-          prev.map((r) => (r.id === reportId ? { ...r, status: "Rejected" as AdminReportStatus } : r)),
+          prev.map((r) => (r.id === reportId ? { ...r, status: "Dismissed" as AdminReportStatus } : r)),
         );
       }
     } catch {
       Alert.alert("Error", "Failed to reject report. Please try again.");
     } finally {
       setActionLoading((prev) => ({ ...prev, [reportId]: false }));
+    }
+  };
+
+  const handleHidePost = async (postId: string, reportId: string) => {
+    setActionLoading((prev) => ({ ...prev, [postId]: true }));
+    try {
+      await changePostVisibility(postId, 3); // 3 = Hidden
+      // Update the report status to resolved
+      await resolvePostReport(reportId);
+      setPostReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, status: "Resolved" as AdminReportStatus } : r)),
+      );
+      Alert.alert("Success", "Post has been hidden successfully.");
+    } catch {
+      Alert.alert("Error", "Failed to hide post. Please try again.");
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [postId]: false }));
     }
   };
 
@@ -420,6 +456,8 @@ export default function ReportsScreen() {
               report={item as BE_PostReport}
               onResolve={() => handleResolve(item.id, false)}
               onReject={() => handleReject(item.id, false)}
+              onHidePost={() => handleHidePost((item as BE_PostReport).postId, item.id)}
+              isHiding={!!actionLoading[(item as BE_PostReport).postId]}
             />
           )
         }
@@ -511,6 +549,19 @@ const styles = StyleSheet.create({
   noteRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
   noteText: { fontSize: 12, color: AppColors.textMuted },
   cardActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  btnHide: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  btnHideText: { fontSize: 13, fontWeight: "600", color: "#F59E0B" },
   btnReject: {
     flex: 1,
     flexDirection: "row",

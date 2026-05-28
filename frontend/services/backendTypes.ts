@@ -105,6 +105,12 @@ export interface BE_FollowerListDto {
   followedAt: string;
 }
 
+export interface BE_FriendListDto {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 export interface BE_FollowStats {
   userId: string;
   displayName: string;
@@ -310,9 +316,43 @@ export interface BE_StoryItemDetail {
   createdAt: string;
 }
 
+// ============ REPORT TYPES ============
+
+export type ReportReason =
+  | 'Spam'
+  | 'Fake Account'
+  | 'Harassment or Bullying'
+  | 'Inappropriate Content'
+  | 'Scam or Fraud'
+  | 'Hate Speech'
+  | 'Other';
+
+export const REPORT_REASONS: ReportReason[] = [
+  'Spam',
+  'Fake Account',
+  'Harassment or Bullying',
+  'Inappropriate Content',
+  'Scam or Fraud',
+  'Hate Speech',
+  'Other',
+];
+
+/** Request body for POST /user/reports — mirrors backend ReportUserRequest */
+export interface BE_ReportUserRequest {
+  TargetUserId: string;
+  Reason: ReportReason;
+  AdditionalDetails?: string;
+}
+
+/** Response from the report endpoint */
+export interface BE_ReportUserResponse {
+  success: boolean;
+  message?: string;
+}
+
 // ============ ADMIN TYPES ============
 
-export type AdminReportStatus = "Pending" | "Resolved" | "Rejected";
+export type AdminReportStatus = "Pending" | "Resolved" | "Dismissed";
 
 export interface BE_UserReport {
   id: string;
@@ -321,6 +361,7 @@ export interface BE_UserReport {
   reporterDisplayName: string;
   reportedDisplayName: string;
   reason: string;
+  additionalDetails: string | null;
   createdAt: string;
   status: AdminReportStatus;
   adminNote: string | null;
@@ -330,7 +371,7 @@ export interface BE_UserReport {
 export interface BE_PostReport {
   id: string;
   postId: string;
-  reporterUserId: string;
+  reporterId: string;
   reporterDisplayName: string;
   postContent: string;
   postMediaUrls: string[];
@@ -354,9 +395,21 @@ export interface BE_AdminUserProfile {
   fullName: string;
   gender: string;
   isActive: boolean;
+  isBanned: boolean;
   isVerified: boolean;
   createdAt: string;
   followersCount: number;
   followingCount: number;
   postsCount: number;
+}
+
+// ============ BOOKMARK TYPES ============
+
+export interface BE_BookmarkResponse {
+  id: string;
+  postId: string;
+  userId: string;
+  collection: string | null;
+  createdAt: string;
+  post: BE_PostResponse | null;
 }

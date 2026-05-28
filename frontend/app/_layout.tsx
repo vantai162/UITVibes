@@ -102,7 +102,7 @@ export default function RootLayout() {
           <Stack.Screen name="admin/users" options={{ headerShown: false }} />
           <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
         </Stack>
-        <StatusBar style="auto" />
+        <StatusBar style="dark" />
       </AppProvider>
     </ThemeProvider>
     </GestureHandlerRootView>

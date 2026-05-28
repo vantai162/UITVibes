@@ -33,8 +33,8 @@ import { AppColors } from '../constants/theme';
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 
-const TAB_COUNT = 7;
-const TAB_ICONS = ['home', 'search', 'music', 'plus', 'video', 'message-circle', 'user'] as const;
+const TAB_COUNT = 6;
+const TAB_ICONS = ['home', 'search', 'plus', 'video', 'message-circle', 'user'] as const;
 
 const CAPSULE_WIDTH_RATIO = 0.88;
 const CAPSULE_RADIUS = 28;
@@ -49,7 +49,7 @@ const BOTTOM_INSET = 4;
 export const TAB_BAR_BOTTOM_OFFSET = BAR_HEIGHT + BOTTOM_INSET + FLOAT_BOTTOM;
 export const TAB_BAR_HEIGHT = BAR_HEIGHT;
 
-const CREATE_INDEX = 3;
+const CREATE_INDEX = 2;
 
 // ── Dimensions ──────────────────────────────────────────────────────────────
 

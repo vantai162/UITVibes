@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backdrop: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
@@ -278,9 +278,9 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.surfaceElevated,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-    minHeight: 300,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Safe area for iPhone notch/home indicator
+    maxHeight: SCREEN_HEIGHT * 0.75,
+    minHeight: 400,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
   },
   header: {
     flexDirection: "row",
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: layoutPadding,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   loader: {
     paddingVertical: 40,

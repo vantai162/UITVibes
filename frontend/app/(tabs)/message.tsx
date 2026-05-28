@@ -37,7 +37,6 @@ import { formatDistanceToNow } from "../../utils/time";
 
 interface ConversationItemProps {
   item: Conversation;
-  convMembers: User[];
   currentUserId: string | undefined;
   isUserOnline: (userId: string) => boolean;
   isCurrentUser: (userId: string) => boolean;
@@ -48,7 +47,6 @@ interface ConversationItemProps {
 
 const ConversationItem: React.FC<ConversationItemProps> = ({
   item,
-  convMembers,
   currentUserId,
   isUserOnline,
   isCurrentUser,
@@ -56,7 +54,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   onDelete,
   onMute,
 }) => {
-  const other = convMembers.find(m => item.members.some(convMember => convMember.id === m.id) && m.id !== currentUserId);
+  const other = item.members.find((m) => m.id !== currentUserId);
   const hasUnread = item.unreadCount > 0;
   const isGroup = item.isGroup;
   const displayName = item.name || other?.displayName || "Chat";
@@ -611,7 +609,6 @@ export default function MessageScreen() {
     return (
       <ConversationItem
         item={item}
-        convMembers={convMembers}
         currentUserId={currentUser?.id}
         isUserOnline={isUserOnline}
         isCurrentUser={isCurrentUser}

@@ -286,6 +286,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               fill={localBookmarked ? AppColors.primary : 'transparent'}
               strokeWidth={2}
             />
+            <Text style={styles.actionText}>Save</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -441,6 +442,7 @@ const styles = StyleSheet.create({
   bookmarkGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
     marginLeft: 'auto',
   },
   actionText: {

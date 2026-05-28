@@ -257,7 +257,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="shield"
             label="Privacy & Security"
-            onPress={() => {}}
+            onPress={() => settingsRouter.push('/privacy' as any)}
           />
           <SettingsRow
             icon="user-x"

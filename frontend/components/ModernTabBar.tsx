@@ -66,6 +66,9 @@ const BOTTOM_INSET       = 4;
  */
 export const TAB_BAR_BOTTOM_OFFSET = BAR_HEIGHT + BOTTOM_INSET + FLOAT_BOTTOM;
 
+/** Height of the tab bar */
+export const TAB_BAR_HEIGHT = BAR_HEIGHT;
+
 /** Create-tab is index 3 (centered in the 7-tab layout). */
 const CREATE_INDEX = 3;
 

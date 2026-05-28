@@ -27,7 +27,7 @@ import { AppColors, layoutPadding } from "../../constants/theme";
 import { SkeletonShimmer } from "../../components/SkeletonLoader";
 import { updateComment, deleteComment } from "../../services/postService";
 import { CommentInput } from "../../components/CommentInput";
-import { ScreenHeader } from "../../components/ScreenHeader";
+import { CompactHeader } from "../../components/StaticPremiumHeader";
 
 // ─── Skeleton for initial load ────────────────────────────────────────────────
 const PostDetailSkeleton = () => (
@@ -363,7 +363,7 @@ export default function PostDetailScreen() {
 
   const renderHeader = () => (
     <>
-      <ScreenHeader title="Post" onBack={() => router.back()} />
+      <CompactHeader title="Post" showBack onBack={() => router.back()} />
 
       {/* Post Header: User Info */}
       <View style={styles.postHeader}>

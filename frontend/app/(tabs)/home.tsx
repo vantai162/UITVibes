@@ -78,40 +78,40 @@ export default function HomeScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header
-          title="Discover"
-          showAvatar
-          avatarUser={currentUser}
-          rightAction={
-            <TouchableOpacity
-              style={styles.notificationButton}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather name="bell" size={22} color={AppColors.text} strokeWidth={2} />
-            </TouchableOpacity>
-          }
-          bottomContent={
-            <View style={styles.feedTabs}>
-              <View style={[styles.feedTab, styles.feedTabActive]}>
-                <Text style={[styles.feedTabText, styles.feedTabTextActive]}>For You</Text>
-              </View>
-              <View style={styles.feedTab}>
-                <Text style={styles.feedTabText}>Following</Text>
-              </View>
+      <Header
+        title="Home"
+        showAvatar
+        avatarUser={currentUser}
+        rightAction={
+          <TouchableOpacity
+            style={styles.notificationButton}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="bell" size={22} color={AppColors.text} strokeWidth={2} />
+          </TouchableOpacity>
+        }
+        bottomContent={
+          <View style={styles.feedTabs}>
+            <View style={[styles.feedTab, styles.feedTabActive]}>
+              <Text style={[styles.feedTabText, styles.feedTabTextActive]}>For You</Text>
             </View>
-          }
-        />
-        <FeedSkeleton count={3} />
-      </SafeAreaView>
-    );
+            <View style={styles.feedTab}>
+              <Text style={styles.feedTabText}>Following</Text>
+            </View>
+          </View>
+        }
+      />
+      <FeedSkeleton count={3} />
+    </SafeAreaView>
+  );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Unified premium header */}
       <Header
-        title="Discover"
+        title="Home"
         showAvatar
         avatarUser={currentUser}
         rightAction={

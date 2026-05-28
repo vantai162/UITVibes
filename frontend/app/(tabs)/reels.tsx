@@ -31,9 +31,11 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { Header } from '../../components';
+import { StaticPremiumHeader } from '../../components/StaticPremiumHeader';
 import { ReelCard, ReelDisplayData } from '../../components/ReelCard';
 import { CommentSheet } from '../../components/CommentSheet';
 import { ShareSheet } from '../../components/ShareSheet';
+import { Avatar } from '../../components/Avatar';
 import { useApp } from '../../context/AppContext';
 import type { Comment as CommentType } from '../../data/mockData';
 import { fetchUserById } from '../../services/userService';
@@ -434,22 +436,22 @@ const handlePostComment = useCallback(async (text: string) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark" backgroundColor="#000" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Header */}
-        <Header
-          title="Reels"
-          avatarUser={currentUser}
-          rightAction={
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.cameraButton}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather name="camera" size={22} color="white" strokeWidth={2} />
-            </TouchableOpacity>
-          }
-          headerStyle={styles.header}
-          titleStyle={styles.headerTitle}
-        />
+        {/* Header - để trong suốt vì nền reels là đen */}
+        <View style={styles.reelsHeader}>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/profile')}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+          >
+            {currentUser ? (
+              <Avatar user={currentUser} size="small" />
+            ) : (
+              <View style={styles.avatarPlaceholder} />
+            )}
+          </TouchableOpacity>
+          <Text style={styles.reelsTitle}>Reels</Text>
+          <View style={styles.reelsHeaderRight} />
+        </View>
 
         {/* Reels Feed */}
         <Animated.FlatList<ReelDisplayData>
@@ -521,6 +523,28 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  reelsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  reelsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  reelsHeaderRight: {
+    width: 40,
+  },
+  avatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   header: {
     backgroundColor: 'transparent',

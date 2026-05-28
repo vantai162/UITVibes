@@ -554,7 +554,7 @@ Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt:
 
 ### Bước 1: Sao Chép Kho Lưu Trữ
 ```bash
-git clone https://github.com/vantai162/UITVibes-Microservices.git
+git clone https://github.com/vantai162/UITVibes.git
 cd UITVibes-Project
 ```
 

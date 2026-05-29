@@ -133,6 +133,8 @@ export default function ReelsScreen() {
   const [reelComments, setReelComments] = useState<CommentType[]>([]);
   const [reelUsers, setReelUsers] = useState<Map<string, User>>(new Map());
   const [displayReels, setDisplayReels] = useState<ReelDisplayData[]>([]);
+  // Use ref to track if we've already shuffled - won't cause re-render when changed
+  const hasShuffledRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
@@ -198,8 +200,11 @@ export default function ReelsScreen() {
       // Transform reels for display
       let transformed = reels.map((reel) => transformReelForDisplay(reel, newUsers));
 
-      // Shuffle reels randomly for discover feed
-      transformed = shuffleArray(transformed);
+      // Only shuffle once on initial load, not on every state update
+      if (!hasShuffledRef.current) {
+        transformed = shuffleArray(transformed);
+        hasShuffledRef.current = true;
+      }
 
       setDisplayReels(transformed);
     };

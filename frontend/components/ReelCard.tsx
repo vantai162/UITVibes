@@ -393,11 +393,14 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const videoRef = useRef<Video>(null);
   const buttonPressedRef = useRef(false);
 
+  // Set flag to prevent card's onPress from triggering when button is pressed
+  // Must stay true long enough to cover the entire touch sequence (touchstart → touchend)
+  // iOS can delay touch events, so use 500ms to safely cover the double-tap threshold
   const handleButtonPress = useCallback(() => {
     buttonPressedRef.current = true;
     setTimeout(() => {
       buttonPressedRef.current = false;
-    }, 100);
+    }, 500);
   }, []);
 
   // Determine if video should play: active AND not paused globally

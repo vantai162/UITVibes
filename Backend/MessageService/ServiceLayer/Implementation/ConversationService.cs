@@ -51,8 +51,6 @@ namespace MessageService.ServiceLayer.Implementation
             await EnsureFriendsAsync(userId, new[] { targetUserId });
 
             // Detach conversation so EF won't try to UPDATE it when we add a member
-            _context.Entry(conversation).State = EntityState.Detached;
-
             // Check again with a fresh query to avoid race conditions
             var alreadyMember = await _context.ConversationMembers
                 .AsNoTracking()
@@ -277,6 +275,33 @@ namespace MessageService.ServiceLayer.Implementation
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("User {UserId} left conversation {ConversationId}", userId, conversationId);
+        }
+
+        public async Task DeleteConversationAsync(Guid conversationId, Guid userId)
+        {
+            var conversation = await _context.Conversations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == conversationId && !c.IsDeleted);
+
+            if (conversation == null)
+                throw new KeyNotFoundException("Conversation not found");
+
+            var member = await _context.ConversationMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null);
+
+            if (member == null)
+                throw new UnauthorizedAccessException("You are not a member of this conversation");
+
+            var conversationToDelete = await _context.Conversations
+                .FirstOrDefaultAsync(c => c.Id == conversationId);
+            if (conversationToDelete != null)
+            {
+                conversationToDelete.IsDeleted = true;
+                await _context.SaveChangesAsync();
+            }
+
+            _logger.LogInformation("Conversation {ConversationId} deleted by user {UserId}", conversationId, userId);
         }
 
         public async Task RemoveMemberFromGroupAsync(Guid conversationId, Guid userId, Guid targetUserId)

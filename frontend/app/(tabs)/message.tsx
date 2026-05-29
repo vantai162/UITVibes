@@ -20,6 +20,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
 import * as api from "../../services/api";
+import { deleteConversation } from "../../services/messageService";
 import { invokeHub } from "../../services/signalrService";
 import { Conversation, Message, User } from "../../data/mockData";
 import { AppColors, layoutPadding } from "../../constants/theme";
@@ -42,7 +43,6 @@ interface ConversationItemProps {
   isCurrentUser: (userId: string) => boolean;
   onPress: (conv: Conversation) => void;
   onDelete: (convId: string) => void;
-  onMute: (convId: string, displayName: string) => void;
 }
 
 const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -52,7 +52,6 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   isCurrentUser,
   onPress,
   onDelete,
-  onMute,
 }) => {
   const other = item.members.find((m) => m.id !== currentUserId);
   const hasUnread = item.unreadCount > 0;
@@ -74,10 +73,6 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     );
   };
 
-  const handleMute = () => {
-    onMute(item.id, displayName);
-  };
-
   return (
     <SwipeableRow
       rightAction={{
@@ -86,13 +81,6 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
         backgroundColor: AppColors.error,
         label: 'Delete',
         onPress: handleDelete,
-      }}
-      leftAction={{
-        icon: 'bell-off',
-        color: '#FFFFFF',
-        backgroundColor: '#8B7355',
-        label: 'Mute',
-        onPress: handleMute,
       }}
     >
       <TouchableOpacity
@@ -614,12 +602,13 @@ export default function MessageScreen() {
         isCurrentUser={isCurrentUser}
         onPress={handleConversationPress}
         onDelete={async (convId) => {
-          console.log('Delete conversation:', convId);
-          await refreshConversations();
-        }}
-        onMute={(convId, displayName) => {
-          console.log('Mute conversation:', convId);
-          Alert.alert('Muted', `Notifications muted for ${displayName}`);
+          try {
+            await deleteConversation(convId);
+            await refreshConversations();
+          } catch (error) {
+            console.error('Failed to delete conversation:', error);
+            Alert.alert('Error', 'Failed to delete conversation');
+          }
         }}
       />
     );

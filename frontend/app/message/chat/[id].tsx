@@ -444,7 +444,6 @@ export default function ChatScreen() {
   if (!conversation) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.centerState}>
           <Text style={styles.emptyChatTitle}>Conversation not found</Text>
           <TouchableOpacity onPress={() => router.back()}>
@@ -457,7 +456,6 @@ export default function ChatScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Chat Header */}
         <View style={styles.chatHeader}>

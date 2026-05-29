@@ -33,8 +33,8 @@ import { AppColors } from '../constants/theme';
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 
-const TAB_COUNT = 6;
-const TAB_ICONS = ['home', 'search', 'plus', 'video', 'message-circle', 'user'] as const;
+const TAB_COUNT = 5;
+const TAB_ICONS = ['home', 'search', 'plus', 'play-circle', 'user'] as const;
 
 const CAPSULE_WIDTH_RATIO = 0.88;
 const CAPSULE_RADIUS = 28;
@@ -253,7 +253,7 @@ export function ModernTabBar({
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
-  const TAB_ROUTE_NAMES = ['home', 'search', 'music', 'create', 'reels', 'message', 'profile'];
+  const TAB_ROUTE_NAMES = ['home', 'search', 'create', 'reels', 'profile'];
   const isTabNavigator =
     state.type === 'tab' ||
     (state.routes.length > 0 &&
@@ -346,6 +346,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     justifyContent: 'flex-end',
+    zIndex: 10,
   },
 
   capsule: {

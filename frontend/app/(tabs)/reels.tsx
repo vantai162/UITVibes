@@ -108,7 +108,6 @@ export default function ReelsScreen() {
     reels,
     refreshReels,
     toggleReelLike,
-    toggleReelBookmark,
     addReelComment,
     deleteReelComment,
     toggleReelCommentLike,
@@ -245,11 +244,6 @@ export default function ReelsScreen() {
   const handleLike = useCallback((reel: ReelDisplayData) => {
     toggleReelLike(reel.id, reel.isLiked);
   }, [toggleReelLike]);
-
-  // ── Bookmark handler ─────────────────────────────────────────────────────────
-  const handleBookmark = useCallback((reel: ReelDisplayData) => {
-    toggleReelBookmark(reel.id);
-  }, [toggleReelBookmark]);
 
   // ── Comment handlers ─────────────────────────────────────────────────────────
   const handleOpenComments = useCallback(async (reel: ReelDisplayData) => {
@@ -405,12 +399,11 @@ const handlePostComment = useCallback(async (text: string) => {
         onLike={() => handleLike(item)}
         onComment={() => handleOpenComments(item)}
         onShare={() => handleOpenShare(item)}
-        onBookmark={() => handleBookmark(item)}
         onUserPress={() => handleUserPress(item.userId)}
         onFollow={() => handleFollow(item.userId)}
       />
     ),
-    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleBookmark, handleUserPress, handleFollow],
+    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow],
   );
 
   // ── Render separator ─────────────────────────────────────────────────────────

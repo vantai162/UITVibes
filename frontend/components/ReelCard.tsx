@@ -365,7 +365,6 @@ interface ReelCardProps {
   onLike: () => void;
   onComment: () => void;
   onShare: () => void;
-  onBookmark: () => void;
   onUserPress: () => void;
   onFollow: () => void;
 }
@@ -379,14 +378,12 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   onLike,
   onComment,
   onShare,
-  onBookmark,
   onUserPress,
   onFollow,
 }) => {
   const insets = useSafeAreaInsets();
   const [showHeart, setShowHeart] = useState(false);
   const [isLiked, setIsLiked] = useState(item.isLiked);
-  const [isBookmarked, setIsBookmarked] = useState(item.isBookmarked || false);
   const [showPlayPause, setShowPlayPause] = useState(false);
   const [progress, setProgress] = useState(0);
   const lastTap = useRef<number>(0);
@@ -455,11 +452,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     setIsLiked(!isLiked);
     onLike();
   }, [isLiked, onLike]);
-
-  const handleBookmark = useCallback(() => {
-    setIsBookmarked(!isBookmarked);
-    onBookmark();
-  }, [isBookmarked, onBookmark]);
 
   const formatCount = (count: number): string => {
     if (count >= 1000000) {
@@ -554,17 +546,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
             label=""
             onPress={onShare}
             onPressIn={handleButtonPress}
-          />
-        </View>
-
-        <View pointerEvents="auto">
-          <ActionButton
-            icon="bookmark"
-            label=""
-            filled={isBookmarked}
-            onPress={handleBookmark}
-            onPressIn={handleButtonPress}
-            isActive={isBookmarked}
           />
         </View>
 

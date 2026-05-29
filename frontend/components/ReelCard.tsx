@@ -207,6 +207,7 @@ interface UserAvatarProps {
   onUserPress: () => void;
   onFollowPress: () => void;
   onPressIn?: () => void;
+  isCurrentUser?: boolean;
 }
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
@@ -214,38 +215,99 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   onUserPress,
   onFollowPress,
   onPressIn,
+  isCurrentUser = false,
 }) => {
+  const showFollowButton = user.isFollowing === false && !isCurrentUser;
+
+  // Animation values
+  const buttonScale = useSharedValue(1);
+  const buttonOpacity = useSharedValue(1);
+  const avatarBounce = useSharedValue(1);
+  const rippleScale = useSharedValue(0);
+  const rippleOpacity = useSharedValue(0);
+
+  const handleFollowPress = (e: any) => {
+    e?.stopPropagation?.();
+    onPressIn?.();
+
+    // Ripple animation
+    rippleScale.value = 0;
+    rippleOpacity.value = 0.6;
+    rippleScale.value = withTiming(2, { duration: 400 });
+    rippleOpacity.value = withTiming(0, { duration: 400 });
+
+    // Button scale down + fade out
+    buttonScale.value = withSequence(
+      withSpring(0.6, { damping: 15, stiffness: 400 }),
+      withTiming(0, { duration: 200 })
+    );
+    buttonOpacity.value = withTiming(0, { duration: 200 });
+
+    // Avatar bounce
+    avatarBounce.value = withSequence(
+      withSpring(1.15, { damping: 8, stiffness: 300 }),
+      withSpring(1, { damping: 12, stiffness: 200 })
+    );
+
+    // Call the actual follow handler
+    onFollowPress();
+  };
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+    opacity: buttonOpacity.value,
+  }));
+
+  const avatarAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: avatarBounce.value }],
+  }));
+
+  const rippleAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: rippleScale.value }],
+    opacity: rippleOpacity.value,
+  }));
+
   return (
     <View style={styles.userAvatarContainer}>
-      <TouchableOpacity
-        onPress={(e) => {
-          e.stopPropagation?.();
-          onPressIn?.();
-          onUserPress();
-        }}
-        activeOpacity={0.8}
-      >
-        <View style={styles.avatarRing}>
-          <Image
-            source={{ uri: user.avatar || 'https://i.pravatar.cc/150' }}
-            style={styles.avatar}
-          />
-        </View>
-      </TouchableOpacity>
-      {user.isFollowing === false && (
+      {/* Ripple effect behind button */}
+      <Animated.View
+        style={[
+          styles.followRipple,
+          rippleAnimatedStyle,
+        ]}
+        pointerEvents="none"
+      />
+
+      <Animated.View style={avatarAnimatedStyle}>
         <TouchableOpacity
-          style={styles.followBtn}
           onPress={(e) => {
-            e.stopPropagation?.();
+            e?.stopPropagation?.();
             onPressIn?.();
-            onFollowPress();
+            onUserPress();
           }}
           activeOpacity={0.8}
         >
-          <View style={styles.followBtnInner}>
-            <Feather name="plus" size={12} color="white" strokeWidth={3} />
+          <View style={styles.avatarRing}>
+            <Image
+              source={{ uri: user.avatar || 'https://i.pravatar.cc/150' }}
+              style={styles.avatar}
+            />
           </View>
         </TouchableOpacity>
+      </Animated.View>
+
+      {showFollowButton && (
+        <Animated.View style={buttonAnimatedStyle}>
+          <TouchableOpacity
+            style={styles.followBtn}
+            onPress={handleFollowPress}
+            activeOpacity={1}
+          >
+            <View style={styles.followBtnInner}>
+              <Feather name="plus" size={12} color="white" strokeWidth={3} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );
@@ -367,6 +429,7 @@ interface ReelCardProps {
   onShare: () => void;
   onUserPress: () => void;
   onFollow: () => void;
+  isCurrentUser?: boolean;
 }
 
 export const ReelCard: React.FC<ReelCardProps> = ({
@@ -380,6 +443,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   onShare,
   onUserPress,
   onFollow,
+  isCurrentUser = false,
 }) => {
   const insets = useSafeAreaInsets();
   const [showHeart, setShowHeart] = useState(false);
@@ -517,6 +581,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
             onUserPress={onUserPress}
             onFollowPress={onFollow}
             onPressIn={handleButtonPress}
+            isCurrentUser={isCurrentUser}
           />
         </View>
 
@@ -689,6 +754,14 @@ const styles = StyleSheet.create({
   followBtnInner: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  followRipple: {
+    position: 'absolute',
+    top: -5,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: AppColors.primary,
   },
   actionButton: {
     alignItems: 'center',

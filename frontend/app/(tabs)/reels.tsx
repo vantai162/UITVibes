@@ -22,10 +22,12 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -100,6 +102,7 @@ function shuffleArray<T>(array: T[]): T[] {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ReelsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
 
@@ -111,6 +114,7 @@ export default function ReelsScreen() {
     addReelComment,
     deleteReelComment,
     toggleReelCommentLike,
+    toggleFollow,
   } = useApp();
 
   // Calculate item height dynamically based on screen height and tab bar offset
@@ -137,6 +141,7 @@ export default function ReelsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
@@ -379,13 +384,25 @@ const handlePostComment = useCallback(async (text: string) => {
 
   // ── User navigation ─────────────────────────────────────────────────────────
   const handleUserPress = useCallback((userId: string) => {
-    console.log('Navigate to user:', userId);
-  }, []);
+    router.push(`/profile/${userId}`);
+  }, [router]);
 
   // ── Follow handler ──────────────────────────────────────────────────────────
-  const handleFollow = useCallback((userId: string) => {
-    Alert.alert('Follow', `You are now following this user!`);
-  }, []);
+  const handleFollow = useCallback(async (userId: string) => {
+    try {
+      await toggleFollow(userId);
+    } catch (error) {
+      console.error('Failed to toggle follow:', error);
+    }
+  }, [toggleFollow]);
+
+  // ── Refresh handler ─────────────────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    hasShuffledRef.current = false; // Re-shuffle on refresh
+    await refreshReels();
+    setIsRefreshing(false);
+  }, [refreshReels]);
 
   // ── Render reel card ────────────────────────────────────────────────────────
   const renderItem = useCallback(
@@ -401,6 +418,7 @@ const handlePostComment = useCallback(async (text: string) => {
         onShare={() => handleOpenShare(item)}
         onUserPress={() => handleUserPress(item.userId)}
         onFollow={() => handleFollow(item.userId)}
+        isCurrentUser={item.userId === currentUser?.id}
       />
     ),
     [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow],
@@ -471,6 +489,14 @@ const handlePostComment = useCallback(async (text: string) => {
           snapToAlignment="start"
           ItemSeparatorComponent={ItemSeparator}
           ListEmptyComponent={ListEmptyComponent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={AppColors.primary}
+              colors={[AppColors.primary]}
+            />
+          }
         />
 
         {/* Instagram-style page indicator */}

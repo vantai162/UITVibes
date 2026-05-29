@@ -51,29 +51,49 @@ namespace MessageService.ServiceLayer.Implementation
             await EnsureFriendsAsync(userId, new[] { targetUserId });
 
             // Detach conversation so EF won't try to UPDATE it when we add a member
-            // Check again with a fresh query to avoid race conditions
-            var alreadyMember = await _context.ConversationMembers
-                .AsNoTracking()
-                .AnyAsync(m => m.ConversationId == conversationId && m.UserId == targetUserId && m.LeftAt == null);
-            if (alreadyMember)
-                throw new InvalidOperationException("User is already a member");
+            _context.Entry(conversation).State = EntityState.Detached;
 
-            var newMember = new ConversationMember
+            // Check if user is already an active member
+            var existingMember = await _context.ConversationMembers
+                .FirstOrDefaultAsync(m => m.ConversationId == conversationId && m.UserId == targetUserId);
+
+            if (existingMember != null)
             {
-                Id = Guid.NewGuid(),
-                ConversationId = conversationId,
-                UserId = targetUserId,
-                Role = MemberRole.Member,
-                JoinedAt = DateTime.UtcNow,
-                LastReadAt = DateTime.UtcNow,
-            };
-            _context.ConversationMembers.Add(newMember);
+                if (existingMember.LeftAt == null)
+                {
+                    throw new InvalidOperationException("User is already a member");
+                }
+                // Re-add a previously removed member
+                existingMember.LeftAt = null;
+                existingMember.JoinedAt = DateTime.UtcNow;
+                existingMember.Role = MemberRole.Member;
+                existingMember.LastReadAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // New member - create fresh record
+                var newMember = new ConversationMember
+                {
+                    Id = Guid.NewGuid(),
+                    ConversationId = conversationId,
+                    UserId = targetUserId,
+                    Role = MemberRole.Member,
+                    JoinedAt = DateTime.UtcNow,
+                    LastReadAt = DateTime.UtcNow,
+                };
+                _context.ConversationMembers.Add(newMember);
+            }
 
             try
             {
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
+            {
+                throw new InvalidOperationException("Failed to add member due to a conflict. Please try again.");
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate") == true ||
+                                              ex.InnerException?.Message.Contains("unique") == true)
             {
                 throw new InvalidOperationException("Failed to add member due to a conflict. Please try again.");
             }

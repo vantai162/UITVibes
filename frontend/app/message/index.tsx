@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,122 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
 import * as api from "../../services/api";
-import { Conversation, User } from "../../data/mockData";
+import { deleteConversation } from "../../services/messageService";
+import { invokeHub } from "../../services/signalrService";
+import { Conversation, Message, User } from "../../data/mockData";
 import { AppColors, layoutPadding } from "../../constants/theme";
 import { Typography } from "../../constants/typography";
-import { Header } from "../../components";
+import { StaticPremiumHeader } from "../../components/StaticPremiumHeader";
 import { Avatar } from "../../components/Avatar";
 import { OnlineFriendsList } from "../../components/OnlineFriendsList";
 import { TAB_BAR_BOTTOM_OFFSET } from "../../components/ModernTabBar";
+import { SwipeableRow } from "../../components/SwipeableRow";
 import { formatDistanceToNow } from "../../utils/time";
+
+// ─── Conversation Item Component (extracted to use hooks properly) ───────────
+
+interface ConversationItemProps {
+  item: Conversation;
+  currentUserId: string | undefined;
+  isUserOnline: (userId: string) => boolean;
+  isCurrentUser: (userId: string) => boolean;
+  onPress: (conv: Conversation) => void;
+  onDelete: (convId: string) => void;
+}
+
+const ConversationItem: React.FC<ConversationItemProps> = ({
+  item,
+  currentUserId,
+  isUserOnline,
+  isCurrentUser,
+  onPress,
+  onDelete,
+}) => {
+  const other = item.members.find((m) => m.id !== currentUserId);
+  const hasUnread = item.unreadCount > 0;
+  const isGroup = item.isGroup;
+  const displayName = item.name || other?.displayName || "Chat";
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Conversation',
+      `Delete conversation with ${displayName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDelete(item.id),
+        },
+      ]
+    );
+  };
+
+  return (
+    <SwipeableRow
+      rightAction={{
+        icon: 'trash-2',
+        color: '#FFFFFF',
+        backgroundColor: AppColors.error,
+        label: 'Delete',
+        onPress: handleDelete,
+      }}
+    >
+      <TouchableOpacity
+        style={[styles.convItem, hasUnread && styles.convItemUnread]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.7}
+      >
+        {isGroup ? (
+          <View style={styles.groupAvatar}>
+            <Feather name="users" size={22} color={AppColors.iconMuted} strokeWidth={2} />
+          </View>
+        ) : (
+          <View style={styles.avatarContainer}>
+            <Avatar
+              user={other ?? ({ id: '', username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as User)}
+              size="medium"
+              showOnlineIndicator={true}
+              isOnline={isUserOnline(other?.id ?? '')}
+            />
+          </View>
+        )}
+        <View style={styles.convContent}>
+          <View style={styles.convTop}>
+            <Text
+              style={[styles.convName, hasUnread && styles.convNameBold]}
+              numberOfLines={1}
+            >
+              {displayName}
+            </Text>
+            <Text style={styles.convTime}>
+              {item.lastMessage?.createdAt &&
+                formatDistanceToNow(new Date(item.lastMessage.createdAt))}
+            </Text>
+          </View>
+          <View style={styles.convBottom}>
+            <Text
+              style={[styles.convLastMessage, hasUnread && styles.convLastMessageBold]}
+              numberOfLines={1}
+            >
+              {isCurrentUser(item.lastMessage?.senderId ?? "")
+                ? "You: "
+                : ""}
+              {item.lastMessage?.text || "No messages yet"}
+            </Text>
+            {hasUnread && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount > 99 ? "99+" : item.unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </SwipeableRow>
+  );
+};
 
 export default function MessageScreen() {
   const router = useRouter();
@@ -250,65 +358,23 @@ export default function MessageScreen() {
   }: {
     item: Conversation;
   }): React.JSX.Element => {
-    const other = getOtherMember(item);
-    const hasUnread = item.unreadCount > 0;
-    const isGroup = item.isGroup;
-    const displayName = item.name || other?.displayName || "Chat";
-    const avatarUri = other?.avatar || item.avatar;
-
     return (
-      <TouchableOpacity
-        style={[styles.convItem, hasUnread && styles.convItemUnread]}
-        onPress={() => handleConversationPress(item)}
-        activeOpacity={0.7}
-      >
-        {isGroup ? (
-          <View style={styles.groupAvatar}>
-            <Feather name="users" size={22} color={AppColors.iconMuted} strokeWidth={2} />
-          </View>
-        ) : (
-          <View style={styles.avatarContainer}>
-            <Avatar
-              user={other ?? ({ id: '', username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as User)}
-              size="medium"
-              showOnlineIndicator={true}
-              isOnline={isUserOnline(other?.id ?? '')}
-            />
-          </View>
-        )}
-        <View style={styles.convContent}>
-          <View style={styles.convTop}>
-            <Text
-              style={[styles.convName, hasUnread && styles.convNameBold]}
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-            <Text style={styles.convTime}>
-              {item.lastMessage?.createdAt &&
-                formatDistanceToNow(new Date(item.lastMessage.createdAt))}
-            </Text>
-          </View>
-          <View style={styles.convBottom}>
-            <Text
-              style={[styles.convLastMessage, hasUnread && styles.convLastMessageBold]}
-              numberOfLines={1}
-            >
-              {isCurrentUser(item.lastMessage?.senderId ?? "")
-                ? "You: "
-                : ""}
-              {item.lastMessage?.text || "No messages yet"}
-            </Text>
-            {hasUnread && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>
-                  {item.unreadCount > 99 ? "99+" : item.unreadCount}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
+      <ConversationItem
+        item={item}
+        currentUserId={currentUser?.id}
+        isUserOnline={isUserOnline}
+        isCurrentUser={isCurrentUser}
+        onPress={handleConversationPress}
+        onDelete={async (convId) => {
+          try {
+            await deleteConversation(convId);
+            await refreshConversations();
+          } catch (error) {
+            console.error('Failed to delete conversation:', error);
+            Alert.alert('Error', 'Failed to delete conversation');
+          }
+        }}
+      />
     );
   };
 
@@ -326,9 +392,11 @@ export default function MessageScreen() {
   // ─── Inbox View ───────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Header
+      <StaticPremiumHeader
         title="Messages"
+        showAvatar
         avatarUser={currentUser}
+        largeTitle
         rightAction={
           <View style={styles.headerActionsRow}>
             <TouchableOpacity
@@ -356,28 +424,36 @@ export default function MessageScreen() {
             >
               <Feather name="users" size={20} color={AppColors.text} strokeWidth={2} />
             </TouchableOpacity>
-          </View>
-        }
-        bottomContent={
-          <View>
-            <View style={styles.searchContainer}>
-              <Feather name="search" size={18} color={AppColors.iconMuted} strokeWidth={2} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search messages"
-                placeholderTextColor={AppColors.iconMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Feather name="x" size={18} color={AppColors.iconMuted} strokeWidth={2} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.headerAction}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() => router.back()}
+            >
+              <Feather name="x" size={20} color={AppColors.text} strokeWidth={2} />
+            </TouchableOpacity>
           </View>
         }
       />
+
+      {/* Search Bar */}
+      <View>
+        <View style={styles.searchContainer}>
+          <Feather name="search" size={18} color={AppColors.iconMuted} strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search messages"
+            placeholderTextColor={AppColors.iconMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Feather name="x" size={18} color={AppColors.iconMuted} strokeWidth={2} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {/* Error banner */}
       {conversationError && (

@@ -23,11 +23,11 @@ import { Post, Comment } from "../../data/mockData";
 import { Avatar, CommentItem, ImageCarousel } from "../../components";
 import { CommentContextMenu, DeleteConfirmModal } from "../../components";
 import { useApp } from "../../context/AppContext";
-import { AppColors } from "../../constants/theme";
+import { AppColors, layoutPadding } from "../../constants/theme";
 import { SkeletonShimmer } from "../../components/SkeletonLoader";
 import { updateComment, deleteComment } from "../../services/postService";
 import { CommentInput } from "../../components/CommentInput";
-import { ScreenHeader } from "../../components/ScreenHeader";
+import { CompactHeader } from "../../components/StaticPremiumHeader";
 
 // ─── Skeleton for initial load ────────────────────────────────────────────────
 const PostDetailSkeleton = () => (
@@ -343,6 +343,14 @@ export default function PostDetailScreen() {
     });
   };
 
+  const getVisibilityMeta = (visibility?: string) => {
+    const normalized = (visibility ?? "").toLowerCase();
+    if (normalized === "followers") return { label: "Followers", icon: "users" as const };
+    if (normalized === "private") return { label: "Private", icon: "lock" as const };
+    if (normalized === "hidden") return { label: "Hidden", icon: "eye-off" as const };
+    return { label: "Public", icon: "globe" as const };
+  };
+
   const handleBookmarkToggle = async () => {
     try {
       if (isBookmarked) {
@@ -363,7 +371,7 @@ export default function PostDetailScreen() {
 
   const renderHeader = () => (
     <>
-      <ScreenHeader title="Post" onBack={() => router.back()} />
+      <CompactHeader title="Post" showBack onBack={() => router.back()} />
 
       {/* Post Header: User Info */}
       <View style={styles.postHeader}>
@@ -376,7 +384,20 @@ export default function PostDetailScreen() {
             <Text style={styles.username}>
               {post.user.fullName || post.user.displayName}
             </Text>
-            <Text style={styles.userHandle}>@{post.user.username}</Text>
+            <Text style={styles.userHandle}>@{post.user.displayName || post.user.username}</Text>
+            <View style={styles.metaRow}>
+              {(() => {
+                const visibilityMeta = getVisibilityMeta(post.visibility);
+                return (
+                  <>
+                    <Feather name={visibilityMeta.icon} size={12} color={AppColors.textSecondary} />
+                    <Text style={styles.visibilityText}>{visibilityMeta.label}</Text>
+                  </>
+                );
+              })()}
+              <Text style={styles.metaSeparator}>•</Text>
+              <Text style={styles.timestamp}>{formatDate(post.createdAt)}</Text>
+            </View>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -454,7 +475,6 @@ export default function PostDetailScreen() {
           </Text>{" "}
           {post.caption}
         </Text>
-        <Text style={styles.timestamp}>{formatDate(post.createdAt)}</Text>
       </View>
 
       {/* Comments Header */}
@@ -527,7 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
   },
   userInfoRow: {
@@ -573,7 +593,7 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 14,
     gap: 20,
   },
@@ -593,10 +613,15 @@ const styles = StyleSheet.create({
     color: AppColors.iconMuted,
   },
   captionContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.border,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   caption: {
     fontSize: 14,
@@ -607,12 +632,21 @@ const styles = StyleSheet.create({
   captionUsername: {
     fontWeight: "600",
   },
+  visibilityText: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+  },
+  metaSeparator: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+    marginHorizontal: 4,
+  },
   timestamp: {
     fontSize: 12,
     color: AppColors.textSecondary,
   },
   commentsHeader: {
-    paddingHorizontal: 16,
+    paddingHorizontal: layoutPadding,
     paddingVertical: 12,
     color: AppColors.textSecondary,
     fontSize: 13,

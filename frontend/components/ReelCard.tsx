@@ -22,10 +22,11 @@ import {
   StyleSheet,
   Dimensions,
   Image,
+  TouchableOpacity,
   Pressable,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { Video } from 'expo-av';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -164,6 +165,7 @@ interface ActionButtonProps {
   filled?: boolean;
   activeColor?: string;
   onPress: () => void;
+  onPressIn?: () => void;
   isActive?: boolean;
 }
 
@@ -173,51 +175,28 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   filled = false,
   activeColor = AppColors.primary,
   onPress,
+  onPressIn,
   isActive = false,
 }) => {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.85, SPRING_PRESS);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1.0, SPRING_SOFT);
-  };
-
-  const handlePress = () => {
-    scale.value = withSequence(
-      withSpring(0.8, SPRING_PRESS),
-      withSpring(1.2, { damping: 10, stiffness: 400 }),
-      withSpring(1.0, SPRING_SOFT),
-    );
-    onPress();
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const iconColor = isActive ? activeColor : 'white';
-
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onPress={handlePress}
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={(e) => {
+        e.stopPropagation?.();
+        onPressIn?.();
+        onPress();
+      }}
       style={styles.actionButton}
     >
-      <Animated.View style={animatedStyle}>
-        <Feather
-          name={icon as any}
-          size={28}
-          color={iconColor}
-          fill={filled || isActive ? iconColor : undefined}
-          strokeWidth={1.5}
-        />
-      </Animated.View>
+      <Feather
+        name={icon as any}
+        size={28}
+        color={isActive ? activeColor : 'white'}
+        fill={filled || isActive ? activeColor : undefined}
+        strokeWidth={1.5}
+      />
       {label ? <Text style={styles.actionLabel}>{label}</Text> : null}
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -227,29 +206,108 @@ interface UserAvatarProps {
   user: User;
   onUserPress: () => void;
   onFollowPress: () => void;
+  onPressIn?: () => void;
+  isCurrentUser?: boolean;
 }
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   user,
   onUserPress,
   onFollowPress,
+  onPressIn,
+  isCurrentUser = false,
 }) => {
+  const showFollowButton = user.isFollowing === false && !isCurrentUser;
+
+  // Animation values
+  const buttonScale = useSharedValue(1);
+  const buttonOpacity = useSharedValue(1);
+  const avatarBounce = useSharedValue(1);
+  const rippleScale = useSharedValue(0);
+  const rippleOpacity = useSharedValue(0);
+
+  const handleFollowPress = (e: any) => {
+    e?.stopPropagation?.();
+    onPressIn?.();
+
+    // Ripple animation
+    rippleScale.value = 0;
+    rippleOpacity.value = 0.6;
+    rippleScale.value = withTiming(2, { duration: 400 });
+    rippleOpacity.value = withTiming(0, { duration: 400 });
+
+    // Button scale down + fade out
+    buttonScale.value = withSequence(
+      withSpring(0.6, { damping: 15, stiffness: 400 }),
+      withTiming(0, { duration: 200 })
+    );
+    buttonOpacity.value = withTiming(0, { duration: 200 });
+
+    // Avatar bounce
+    avatarBounce.value = withSequence(
+      withSpring(1.15, { damping: 8, stiffness: 300 }),
+      withSpring(1, { damping: 12, stiffness: 200 })
+    );
+
+    // Call the actual follow handler
+    onFollowPress();
+  };
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+    opacity: buttonOpacity.value,
+  }));
+
+  const avatarAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: avatarBounce.value }],
+  }));
+
+  const rippleAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: rippleScale.value }],
+    opacity: rippleOpacity.value,
+  }));
+
   return (
     <View style={styles.userAvatarContainer}>
-      <Pressable onPress={onUserPress}>
-        <View style={styles.avatarRing}>
-          <Image
-            source={{ uri: user.avatar || 'https://i.pravatar.cc/150' }}
-            style={styles.avatar}
-          />
-        </View>
-      </Pressable>
-      {user.isFollowing === false && (
-        <Pressable style={styles.followBtn} onPress={onFollowPress}>
-          <View style={styles.followBtnInner}>
-            <Feather name="plus" size={12} color="white" strokeWidth={3} />
+      {/* Ripple effect behind button */}
+      <Animated.View
+        style={[
+          styles.followRipple,
+          rippleAnimatedStyle,
+        ]}
+        pointerEvents="none"
+      />
+
+      <Animated.View style={avatarAnimatedStyle}>
+        <TouchableOpacity
+          onPress={(e) => {
+            e?.stopPropagation?.();
+            onPressIn?.();
+            onUserPress();
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.avatarRing}>
+            <Image
+              source={{ uri: user.avatar || 'https://i.pravatar.cc/150' }}
+              style={styles.avatar}
+            />
           </View>
-        </Pressable>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {showFollowButton && (
+        <Animated.View style={buttonAnimatedStyle}>
+          <TouchableOpacity
+            style={styles.followBtn}
+            onPress={handleFollowPress}
+            activeOpacity={1}
+          >
+            <View style={styles.followBtnInner}>
+              <Feather name="plus" size={12} color="white" strokeWidth={3} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );
@@ -369,9 +427,9 @@ interface ReelCardProps {
   onLike: () => void;
   onComment: () => void;
   onShare: () => void;
-  onBookmark: () => void;
   onUserPress: () => void;
   onFollow: () => void;
+  isCurrentUser?: boolean;
 }
 
 export const ReelCard: React.FC<ReelCardProps> = ({
@@ -383,18 +441,28 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   onLike,
   onComment,
   onShare,
-  onBookmark,
   onUserPress,
   onFollow,
+  isCurrentUser = false,
 }) => {
   const insets = useSafeAreaInsets();
   const [showHeart, setShowHeart] = useState(false);
   const [isLiked, setIsLiked] = useState(item.isLiked);
-  const [isBookmarked, setIsBookmarked] = useState(item.isBookmarked || false);
   const [showPlayPause, setShowPlayPause] = useState(false);
   const [progress, setProgress] = useState(0);
   const lastTap = useRef<number>(0);
   const videoRef = useRef<Video>(null);
+  const buttonPressedRef = useRef(false);
+
+  // Set flag to prevent card's onPress from triggering when button is pressed
+  // Must stay true long enough to cover the entire touch sequence (touchstart → touchend)
+  // iOS can delay touch events, so use 500ms to safely cover the double-tap threshold
+  const handleButtonPress = useCallback(() => {
+    buttonPressedRef.current = true;
+    setTimeout(() => {
+      buttonPressedRef.current = false;
+    }, 500);
+  }, []);
 
   // Determine if video should play: active AND not paused globally
   const shouldPlay = isActive && !isPaused;
@@ -418,6 +486,10 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   }, [isActive]);
 
   const handlePress = useCallback(() => {
+    if (buttonPressedRef.current) {
+      buttonPressedRef.current = false;
+      return;
+    }
     const now = Date.now();
     if (now - lastTap.current < 300) {
       // Double tap - like
@@ -445,11 +517,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     onLike();
   }, [isLiked, onLike]);
 
-  const handleBookmark = useCallback(() => {
-    setIsBookmarked(!isBookmarked);
-    onBookmark();
-  }, [isBookmarked, onBookmark]);
-
   const formatCount = (count: number): string => {
     if (count >= 1000000) {
       return `${(count / 1000000).toFixed(1)}M`;
@@ -471,14 +538,15 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           ref={videoRef}
           source={{ uri: item.videoUrl }}
           style={[styles.background, { height: itemHeight }]}
-          resizeMode={ResizeMode.COVER}
+          resizeMode="cover"
           isLooping
+          shouldPlay={shouldPlay}
           isMuted={false}
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
-              const duration = status.durationMillis || 1;
+              const duration = status.duration || 1;
               const position = status.positionMillis || 0;
-              setProgress(position / duration);
+              setProgress(position / (duration * 1000));
             }
           }}
         />
@@ -503,43 +571,51 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       <View style={[styles.bottomGradient, { bottom: bottomPadding }]} />
 
       {/* Right side actions - positioned above tab bar */}
-      <View style={[styles.rightActions, { bottom: bottomPadding + 60 }]}>
-        <UserAvatar
-          user={item.user}
-          onUserPress={onUserPress}
-          onFollowPress={onFollow}
-        />
+      <View 
+        style={[styles.rightActions, { bottom: bottomPadding + 60 }]}
+        pointerEvents="box-none"
+      >
+        <View pointerEvents="auto">
+          <UserAvatar
+            user={item.user}
+            onUserPress={onUserPress}
+            onFollowPress={onFollow}
+            onPressIn={handleButtonPress}
+            isCurrentUser={isCurrentUser}
+          />
+        </View>
 
-        <ActionButton
-          icon="heart"
-          label={formatCount(item.likes)}
-          filled={isLiked}
-          onPress={handleLike}
-          isActive={isLiked}
-        />
+        <View pointerEvents="auto">
+          <ActionButton
+            icon="heart"
+            label={formatCount(item.likes)}
+            filled={isLiked}
+            onPress={handleLike}
+            onPressIn={handleButtonPress}
+            isActive={isLiked}
+          />
+        </View>
 
-        <ActionButton
-          icon="message-circle"
-          label={formatCount(item.comments)}
-          onPress={onComment}
-        />
+        <View pointerEvents="auto">
+          <ActionButton
+            icon="message-circle"
+            label={formatCount(item.comments)}
+            onPress={onComment}
+            onPressIn={handleButtonPress}
+          />
+        </View>
 
-        <ActionButton
-          icon="send"
-          label=""
-          onPress={onShare}
-        />
-
-        <ActionButton
-          icon="bookmark"
-          label=""
-          filled={isBookmarked}
-          onPress={handleBookmark}
-          isActive={isBookmarked}
-        />
+        <View pointerEvents="auto">
+          <ActionButton
+            icon="send"
+            label=""
+            onPress={onShare}
+            onPressIn={handleButtonPress}
+          />
+        </View>
 
         {/* Music disc */}
-        <View style={styles.musicDisc}>
+        <View style={styles.musicDisc} pointerEvents="auto">
           <View style={styles.musicDiscInner}>
             <Image
               source={{ uri: item.user.avatar || 'https://i.pravatar.cc/150' }}
@@ -550,7 +626,10 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       </View>
 
       {/* Bottom content - positioned above tab bar */}
-      <View style={[styles.bottomContent, { paddingBottom: bottomPadding + 16 }]}>
+      <View 
+        style={[styles.bottomContent, { paddingBottom: bottomPadding + 16 }]}
+        pointerEvents="none"
+      >
         {item.caption && (
           <Caption
             username={item.user.username}
@@ -563,7 +642,10 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       </View>
 
       {/* Progress bar - positioned above tab bar */}
-      <View style={[styles.progressWrapper, { paddingBottom: bottomPadding }]}>
+      <View 
+        style={[styles.progressWrapper, { paddingBottom: bottomPadding }]}
+        pointerEvents="none"
+      >
         <ReelProgressBar isPlaying={isActive} progress={progress} />
       </View>
     </Pressable>
@@ -672,6 +754,14 @@ const styles = StyleSheet.create({
   followBtnInner: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  followRipple: {
+    position: 'absolute',
+    top: -5,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: AppColors.primary,
   },
   actionButton: {
     alignItems: 'center',

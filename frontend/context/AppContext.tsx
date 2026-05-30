@@ -1079,7 +1079,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setNotifications(notifs);
       setUnreadCount(count);
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
     }
   }, []);
 

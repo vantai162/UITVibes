@@ -39,6 +39,7 @@ import {
   addMemberToGroup,
   removeMemberFromGroup,
   leaveGroup,
+  getConversationById,
 } from '../../../services/messageService';
 import { invokeHub } from '../../../services/signalrService';
 import { Avatar } from '../../../components/Avatar';
@@ -220,6 +221,11 @@ export default function ChatScreen() {
       try {
         await addMemberToGroup(conversation.id, userId);
         await refreshConversations();
+        // Reload conversation to get updated members list
+        const updated = await getConversationById(conversation.id);
+        if (updated) {
+          setConvMembers(updated.members);
+        }
         setShowAddMember(false);
         setFriendSearch('');
       } catch (err: any) {
@@ -248,6 +254,11 @@ export default function ChatScreen() {
       try {
         await removeMemberFromGroup(conversation.id, member.id);
         await refreshConversations();
+        // Reload conversation to get updated members list
+        const updated = await getConversationById(conversation.id);
+        if (updated) {
+          setConvMembers(updated.members);
+        }
         setLocalConfirmAction(null);
       } catch (err: any) {
         Alert.alert(
@@ -433,7 +444,6 @@ export default function ChatScreen() {
   if (!conversation) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.centerState}>
           <Text style={styles.emptyChatTitle}>Conversation not found</Text>
           <TouchableOpacity onPress={() => router.back()}>
@@ -446,7 +456,6 @@ export default function ChatScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Chat Header */}
         <View style={styles.chatHeader}>

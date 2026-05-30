@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import { invokeHub } from "../../services/signalrService";
 import { Conversation, Message, User } from "../../data/mockData";
 import { AppColors, layoutPadding } from "../../constants/theme";
 import { Typography } from "../../constants/typography";
-import { Header } from "../../components";
 import { StaticPremiumHeader } from "../../components/StaticPremiumHeader";
 import { Avatar } from "../../components/Avatar";
 import { OnlineIndicator } from "../../components/OnlineIndicator";
@@ -734,6 +733,14 @@ export default function MessageScreen() {
               }}
             >
               <Feather name="users" size={20} color={AppColors.text} strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.headerAction}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() => router.back()}
+            >
+              <Feather name="x" size={20} color={AppColors.text} strokeWidth={2} />
             </TouchableOpacity>
           </View>
         }

@@ -141,9 +141,9 @@ export default function ChatScreen() {
     if (!conversation) return;
     setConvMembers(conversation.members);
     loadMessages(conversation.id)
-      .then(async () => {
-        await new Promise((r) => setTimeout(r, 0));
-        await markMessagesRead(conversation.id);
+      .then(async (loadedMessages) => {
+        const lastMessage = loadedMessages[loadedMessages.length - 1];
+        await markMessagesRead(conversation.id, lastMessage?.id);
       })
       .catch(() => {});
   }, [id, conversation?.id]);

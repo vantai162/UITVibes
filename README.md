@@ -12,6 +12,7 @@ Một nền tảng mạng xã hội phân tán hiện đại được xây dựn
 - [Tổng Quan Microservices](#-tổng-quan-microservices)
 - [Cấu Trúc Dự Án](#-cấu-trúc-dự-án)
 - [Yêu Cầu Hệ Thống](#-yêu-cầu-hệ-thống)
+- [Cấu Hình Môi Trường](#-cấu-hình-môi-trường)
 - [Khởi Động Nhanh](#-khởi-động-nhanh)
 - [Lược Đồ Cơ Sở Dữ Liệu](#-lược-đồ-cơ-sở-dữ-liệu)
 - [Tài Liệu API](#-tài-liệu-api)
@@ -97,7 +98,7 @@ UITVibes là một nền tảng mạng xã hội có khả năng mở rộng cao
 ### Frontend
 | Công Nghệ | Mục Đích |
 |-----------|----------|
-| **React Native (Expo v54)** | Framework di động đa nền tảng |
+| **React Native (Expo ~54)** | Framework di động đa nền tảng |
 | **TypeScript** | JavaScript an toàn về kiểu |
 | **Expo Router** | Đường dẫn dựa trên tập tin & điều hướng |
 | **Axios** | HTTP client với interceptors |
@@ -142,12 +143,11 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
                  │
 ┌────────────────▼────────────────────────────────────────────┐
 │              API Gateway (YARP)                             │
-│         Cổng 5000 - Điều phối Request & JWT Auth            │
+│         Cổng tự động (.NET Aspire)                          │
 └─┬──────────┬──────────┬──────────┬──────────┬───────────────┘
   │          │          │          │          │
 ┌─▼──┐  ┌───▼──┐  ┌────▼───┐ ┌───▼──┐  ┌────▼────┐
 │Auth│  │User  │  │Post    │ │Message  │Notif   │
-│5158│  │5016  │  │5078    │ │5240     │5091    │
 └────┘  └──────┘  └────────┘ └────────┘ └─────────┘
   │        │        │          │         │
   └────────┴────────┼──────────┴─────────┘
@@ -174,7 +174,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ## 🔧 Tổng Quan Microservices
 
-### 1. **AuthService** (Cổng 5158)
+### 1. **AuthService**
 **Mục Đích**: Xác thực người dùng, đăng ký và phân quyền
 - Đăng ký người dùng với xác thực email qua SMTP
 - Tạo JWT token & refresh tokens
@@ -191,7 +191,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ---
 
-### 2. **UserService** (Cổng 5016)
+### 2. **UserService**
 **Mục Đích**: Hồ sơ người dùng, quan hệ xã hội và khám phá
 - Quản lý hồ sơ người dùng (tên hiển thị, avatar, ảnh bìa, tiểu sử)
 - Tải avatar/ảnh bìa qua Cloudinary
@@ -211,7 +211,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ---
 
-### 3. **PostService** (Cổng 5078)
+### 3. **PostService**
 **Mục Đích**: Quản lý nội dung (bài đăng, stories, reels, bình luận)
 - Tạo, đọc, cập nhật, xóa bài đăng
 - Kiểm soát hiển thị (Công khai / Chỉ người theo dõi / Riêng tư)
@@ -236,7 +236,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ---
 
-### 4. **MessageService** (Cổng 5240)
+### 4. **MessageService**
 **Mục Đích**: Nhắn tin và trò chuyện thời gian thực
 - Trò chuyện riêng 1:1 giữa các người dùng
 - Nhắn tin nhóm (nhiều người nhận)
@@ -257,7 +257,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ---
 
-### 5. **NotificationService** (Cổng 5091)
+### 5. **NotificationService**
 **Mục Đích**: Thông báo đẩy và quản lý thông báo
 - Tích hợp Firebase Cloud Messaging (FCM) để gửi thông báo
 - Sự kiện thông báo trong ứng dụng
@@ -279,7 +279,7 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 ---
 
-### 6. **ApiService (API Gateway)** (Cổng 5000)
+### 6. **ApiService (API Gateway)**
 **Mục Đích**: Điều phối request trung tâm, tổng hợp và xác thực
 - YARP reverse proxy điều phối đến tất cả microservices
 - Xác thực JWT tập trung & phân quyền
@@ -292,12 +292,14 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 
 **Bản Đồ Điều Phối**:
 ```
-/auth/* → AuthService (5158)
-/users/* → UserService (5016)
-/posts/* → PostService (5078)
-/messages/* → MessageService (5240) + SignalR hub
-/notifications/* → NotificationService (5091)
+/auth/* → AuthService
+/users/* → UserService
+/posts/* → PostService
+/messages/* → MessageService + SignalR hub
+/notifications/* → NotificationService
 ```
+
+> **Lưu ý**: Các cổng của services được gán tự động bởi .NET Aspire. Xem console output khi chạy `dotnet run` để biết cổng cụ thể.
 
 ---
 
@@ -425,10 +427,8 @@ UITVibes/
 │   │   │   ├── _layout.tsx
 │   │   │   ├── home.tsx
 │   │   │   ├── search.tsx
-│   │   │   ├── music.tsx
-│   │   │   ├── profile.tsx
-│   │   │   ├── message.tsx
 │   │   │   ├── reels.tsx
+│   │   │   ├── profile.tsx
 │   │   │   └── create.tsx
 │   │   ├── auth/
 │   │   ├── post/
@@ -550,27 +550,92 @@ Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt:
 
 ---
 
+## 🔐 Cấu Hình Môi Trường
+
+### .NET Aspire Parameters
+
+Khi chạy `.NET Aspire`, bạn cần cung cấp các tham số sau (được định nghĩa trong `AppHost.cs`):
+
+| Tham Số | Mô Tả | Bắt Buộc | Ví Dụ |
+|---------|--------|-----------|-------|
+| `jwt-key` | Khóa ký JWT tokens | ✅ Có | `YourSuperSecretKeyAtLeast32Chars` |
+| `cloudinary-cloudname` | Cloud name từ Cloudinary | ✅ Có | `my-cloud` |
+| `cloudinary-apikey` | API Key Cloudinary | ✅ Có | `123456789012345` |
+| `cloudinary-apisecret` | API Secret Cloudinary | ✅ Có | `abc123...` |
+| `smtp-server` | Địa chỉ SMTP server | ✅ Có | `smtp.gmail.com` |
+| `smtp-port` | Cổng SMTP | ✅ Có | `587` |
+| `smtp-username` | Tên đăng nhập SMTP | ✅ Có | `your-email@gmail.com` |
+| `smtp-password` | Mật khẩu SMTP/App Password | ✅ Có | `xxxx xxxx xxxx xxxx` |
+| `smtp-senderemail` | Email người gửi | ✅ Có | `noreply@uitvibes.com` |
+| `smtp-sendername` | Tên người gửi | ✅ Có | `UITVibes` |
+| `firebase-credentialpath` | Đường dẫn file JSON Firebase | ❌ Không | `./firebase-key.json` |
+
+### Thiết Lập Tham Số
+
+**Cách 1: Qua command line**
+```bash
+cd Backend/UITVibes-Microservices.AppHost
+dotnet run --params="jwt-key=YourSecretKey;cloudinary-cloudname=mycloud"
+```
+
+**Cách 2: Qua file `appsettings.User.json`**
+```json
+{
+  "Parameters": {
+    "jwt-key": "YourSecretKey",
+    "cloudinary-cloudname": "mycloud",
+    "cloudinary-apikey": "your-api-key",
+    "cloudinary-apisecret": "your-api-secret",
+    "smtp-server": "smtp.gmail.com",
+    "smtp-port": "587",
+    "smtp-username": "your-email@gmail.com",
+    "smtp-password": "your-app-password",
+    "smtp-senderemail": "noreply@uitvibes.com",
+    "smtp-sendername": "UITVibes"
+  }
+}
+```
+
+**Cách 3: Qua biến môi trường**
+```bash
+export ORCHESTRATION_PARAMS="jwt-key=YourSecretKey;..."
+```
+
+### Cloudinary Setup
+1. Đăng ký tài khoản tại [cloudinary.com](https://cloudinary.com)
+2. Lấy Cloud Name, API Key, và API Secret từ Dashboard
+3. Cấu hình Upload Preset cho phép unsigned uploads nếu cần
+
+### Firebase Setup (cho Notifications)
+1. Tạo project Firebase tại [console.firebase.google.com](https://console.firebase.google.com)
+2. Tạo Service Account và tải file JSON
+3. Đặt đường dẫn file vào tham số `firebase-credentialpath`
+
+---
+
 ## 🚀 Khởi Động Nhanh
 
 ### Bước 1: Sao Chép Kho Lưu Trữ
 ```bash
 git clone https://github.com/vantai162/UITVibes.git
-cd UITVibes-Project
+cd UITVibes
 ```
 
-### Bước 2: Khởi Động Hạ Tầng (Docker Compose)
-Khởi động PostgreSQL, Redis, và RabbitMQ:
+### Bước 2: Khởi Động Hạ Tầng
 
+#### Tùy Chọn A: Dùng Docker Compose (Chạy riêng infrastructure)
 ```bash
 cd Backend
 docker-compose up -d
 ```
-
 Điều này sẽ khởi động:
 - PostgreSQL (cổng 5432)
 - Redis (cổng 6379)
 - RabbitMQ (cổng 5672, UI ở 15672)
 - PgAdmin (cổng 5050)
+
+#### Tùy Chọn B: .NET Aspire tự quản lý (Khuyến Nghị)
+Nếu dùng .NET Aspire ở Bước 3, hạ tầng sẽ được khởi động tự động.
 
 ### Bước 3: Thiết Lập Backend
 
@@ -640,8 +705,8 @@ npx expo start
 ## 🔗 Tài Liệu API
 
 ### URL Cơ Bản
-- **Phát Triển**: `http://localhost:5000` (thông qua API Gateway)
-- **Direct Services**: Xem cổng microservice ở trên
+- **Phát Triển**: `http://localhost:<api-gateway-port>` (thông qua API Gateway)
+- **Direct Services**: Xem console output khi chạy .NET Aspire để biết cổng cụ thể
 
 ### Xác Thực
 Tất cả các endpoint (ngoại trừ `/auth/register`, `/auth/login`) yêu cầu token JWT:
@@ -711,7 +776,7 @@ DELETE /devices/{tokenId}       # Hủy đăng ký thiết bị
 
 ### Tài Liệu Swagger
 Truy cập tài liệu API tương tác:
-- **Cục Bộ**: http://localhost:5000/swagger/index.html
+- **Cục Bộ**: `http://localhost:<api-gateway-port>/swagger/index.html`
 
 ---
 
@@ -837,13 +902,11 @@ npm run test
 ## 📊 Giám Sát & Ghi Nhật Ký
 
 ### Health Checks
-Mỗi dịch vụ công bố một endpoint health check:
+Mỗi dịch vụ công bố một endpoint health check (kiểm tra console output để biết cổng cụ thể):
 ```bash
-curl http://localhost:5158/health    # AuthService
-curl http://localhost:5016/health    # UserService
-curl http://localhost:5078/health    # PostService
-curl http://localhost:5240/health    # MessageService
-curl http://localhost:5091/health    # NotificationService
+# .NET Aspire sẽ hiển thị các endpoints trong console
+# Health check endpoint cho mỗi service:
+curl http://localhost:<port>/health
 ```
 
 ### RabbitMQ Management UI

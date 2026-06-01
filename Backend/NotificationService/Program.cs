@@ -23,6 +23,7 @@ FirebaseApp.Create(new AppOptions
 });
 
 builder.Services.AddScoped<IFcmPushSender, FcmPushSender>();
+builder.Services.AddScoped<FcmPushSender>();
 builder.Services.AddScoped<NotificationService.ServiceLayer.Interface.INotificationService, NotificationService.ServiceLayer.Implementation.NotificationService>();
 builder.Services.AddScoped<IUserNotificationSettingService, UserNotificationSettingService>();
 builder.Services.AddScoped<OutboxService>();
@@ -34,6 +35,8 @@ builder.Services.AddHostedService<MessageSentConsumer>();
 builder.Services.AddHostedService<PostLikedConsumer>();
 builder.Services.AddHostedService<PostCommentedConsumer>();
 builder.Services.AddHostedService<UserFollowedConsumer>();
+builder.Services.AddHostedService<PostMentionedConsumer>();
+builder.Services.AddHostedService<CommentMentionedConsumer>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

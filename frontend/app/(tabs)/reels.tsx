@@ -22,10 +22,12 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -43,12 +45,10 @@ import { User } from '../../data/mockData';
 import type { Reel as APIReel } from '../../services/postService';
 import { getReelComments, addReelComment, deleteReelComment, toggleReelCommentLike } from '../../services/postService';
 import { TAB_BAR_BOTTOM_OFFSET } from '../../components/ModernTabBar';
+import { reelsUserCache, clearReelsUserCache } from '../../context/reelsUserCache';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
-
-// ─── User data cache ─────────────────────────────────────────────────────────
-const userCache: Map<string, User> = new Map();
 
 // ─── Transform API Reel to Display Data ───────────────────────────────────────
 
@@ -100,6 +100,7 @@ function shuffleArray<T>(array: T[]): T[] {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ReelsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
 
@@ -108,10 +109,10 @@ export default function ReelsScreen() {
     reels,
     refreshReels,
     toggleReelLike,
-    toggleReelBookmark,
     addReelComment,
     deleteReelComment,
     toggleReelCommentLike,
+    toggleFollow,
   } = useApp();
 
   // Calculate item height dynamically based on screen height and tab bar offset
@@ -136,6 +137,9 @@ export default function ReelsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Track shuffled order by reel IDs - use ref to avoid dependency issues
+  const shuffledReelIdsRef = useRef<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
@@ -173,11 +177,11 @@ export default function ReelsScreen() {
 
       // Fetch user data for reels that don't have cached users
       for (const reel of reels) {
-        if (!userCache.has(reel.userId)) {
+        if (!reelsUserCache.has(reel.userId)) {
           try {
             const user = await fetchUserById(reel.userId);
             if (user) {
-              userCache.set(reel.userId, user);
+              reelsUserCache.set(reel.userId, user);
               newUsers.set(reel.userId, user);
             }
           } catch (error) {
@@ -187,7 +191,7 @@ export default function ReelsScreen() {
       }
 
       // Merge with existing users in cache
-      for (const [userId, user] of userCache) {
+      for (const [userId, user] of reelsUserCache) {
         if (!newUsers.has(userId)) {
           newUsers.set(userId, user);
         }
@@ -198,8 +202,20 @@ export default function ReelsScreen() {
       // Transform reels for display
       let transformed = reels.map((reel) => transformReelForDisplay(reel, newUsers));
 
-      // Shuffle reels randomly for discover feed
-      transformed = shuffleArray(transformed);
+      // Only shuffle once on initial load - if we have existing shuffled order, use it
+      if (shuffledReelIdsRef.current.length === 0) {
+        // First load - shuffle and save the order
+        transformed = shuffleArray(transformed);
+        shuffledReelIdsRef.current = transformed.map((r) => r.id);
+      } else {
+        // Subsequent loads - maintain the shuffled order based on reel IDs
+        const orderMap = new Map(shuffledReelIdsRef.current.map((id, index) => [id, index]));
+        transformed.sort((a, b) => {
+          const indexA = orderMap.get(a.id) ?? reels.length;
+          const indexB = orderMap.get(b.id) ?? reels.length;
+          return indexA - indexB;
+        });
+      }
 
       setDisplayReels(transformed);
     };
@@ -240,11 +256,6 @@ export default function ReelsScreen() {
   const handleLike = useCallback((reel: ReelDisplayData) => {
     toggleReelLike(reel.id, reel.isLiked);
   }, [toggleReelLike]);
-
-  // ── Bookmark handler ─────────────────────────────────────────────────────────
-  const handleBookmark = useCallback((reel: ReelDisplayData) => {
-    toggleReelBookmark(reel.id);
-  }, [toggleReelBookmark]);
 
   // ── Comment handlers ─────────────────────────────────────────────────────────
   const handleOpenComments = useCallback(async (reel: ReelDisplayData) => {
@@ -380,13 +391,25 @@ const handlePostComment = useCallback(async (text: string) => {
 
   // ── User navigation ─────────────────────────────────────────────────────────
   const handleUserPress = useCallback((userId: string) => {
-    console.log('Navigate to user:', userId);
-  }, []);
+    router.push(`/profile/${userId}`);
+  }, [router]);
 
   // ── Follow handler ──────────────────────────────────────────────────────────
-  const handleFollow = useCallback((userId: string) => {
-    Alert.alert('Follow', `You are now following this user!`);
-  }, []);
+  const handleFollow = useCallback(async (userId: string) => {
+    try {
+      await toggleFollow(userId);
+    } catch (error) {
+      console.error('Failed to toggle follow:', error);
+    }
+  }, [toggleFollow]);
+
+  // ── Refresh handler ─────────────────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    // Only shuffle once on initial load - do NOT reshuffle on refresh
+    await refreshReels();
+    setIsRefreshing(false);
+  }, [refreshReels]);
 
   // ── Render reel card ────────────────────────────────────────────────────────
   const renderItem = useCallback(
@@ -400,12 +423,12 @@ const handlePostComment = useCallback(async (text: string) => {
         onLike={() => handleLike(item)}
         onComment={() => handleOpenComments(item)}
         onShare={() => handleOpenShare(item)}
-        onBookmark={() => handleBookmark(item)}
         onUserPress={() => handleUserPress(item.userId)}
         onFollow={() => handleFollow(item.userId)}
+        isCurrentUser={item.userId === currentUser?.id}
       />
     ),
-    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleBookmark, handleUserPress, handleFollow],
+    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow],
   );
 
   // ── Render separator ─────────────────────────────────────────────────────────
@@ -473,6 +496,14 @@ const handlePostComment = useCallback(async (text: string) => {
           snapToAlignment="start"
           ItemSeparatorComponent={ItemSeparator}
           ListEmptyComponent={ListEmptyComponent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={AppColors.primary}
+              colors={[AppColors.primary]}
+            />
+          }
         />
 
         {/* Instagram-style page indicator */}
@@ -515,6 +546,13 @@ const handlePostComment = useCallback(async (text: string) => {
 }
 
 import { AppColors, layoutPadding } from '../../constants/theme';
+
+// ─── Exported function to clear user cache ──────────────────────────────────
+// Called by AppContext when user follows/unfollows someone to ensure
+// reels display the correct follow button state
+export { clearReelsUserCache } from '../../context/reelsUserCache';
+
+// ─── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {

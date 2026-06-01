@@ -1,25 +1,21 @@
+/**
+ * Logger - disables all console logs in production
+ * Must be imported first before any other modules that log
+ */
+import '@/utils/logger';
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import { Platform } from 'react-native';
 import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AppProvider, useApp } from '@/context/AppContext';
+import { AppProvider } from '@/context/AppContext';
 import { AppColors } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
 import { ToastProvider } from '@/components/EnhancedToast';
-import messaging from '@react-native-firebase/messaging';
-import * as Notifications from 'expo-notifications';
-import { handleNotificationTap } from '@/utils/notificationRouter';
-
-// MUST be outside component — called when app is in background/killed
-if (Platform.OS !== 'web') {
-  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-    console.log('[FCM Background] Message:', remoteMessage.data);
-  });
-}
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -71,116 +67,53 @@ function AuthGuard() {
   return null;
 }
 
-function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useApp();
-  const segments = useSegments();
-  const router = useRouter();
-
-  // Notification tap: app was in background, user tapped notification
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
-      handleNotificationTap(remoteMessage.data, router);
-    });
-    return unsubscribe;
-  }, [router]);
-
-  // Foreground notifications: show a local notification when a push arrives
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: remoteMessage.notification?.title ?? 'UITVibes',
-          body: remoteMessage.notification?.body ?? '',
-          data: remoteMessage.data,
-        },
-        trigger: null,
-      });
-    });
-    return unsubscribe;
-  }, []);
-
-  // Notification tap: app was killed, user tapped notification to open it
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    messaging().getInitialNotification().then((remoteMessage) => {
-      if (remoteMessage) {
-        handleNotificationTap(remoteMessage.data, router);
-      }
-    });
-  }, [router]);
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === 'auth';
-
-    if (!isAuthenticated && !inAuthGroup) {
-      // User is not authenticated but trying to access an authenticated screen.
-      // Redirect to login.
-      router.replace('/auth/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      // User is authenticated but trying to access an auth screen.
-      // Redirect to home.
-      router.replace('/(tabs)/home');
-    }
-  }, [isAuthenticated, isLoading, segments]);
-
-  return (
-    <>
-      <AuthGuard />
-      <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: AppColors.background },
-          animation: 'fade',
-          animationDuration: 200,
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="message" options={{ headerShown: false }} />
-        <Stack.Screen name="profile/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="story/create" options={{ headerShown: false }} />
-        <Stack.Screen name="story/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="notifications" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-        <Stack.Screen name="change-password" options={{ headerShown: false }} />
-        <Stack.Screen name="change-password/verify" options={{ headerShown: false }} />
-        <Stack.Screen name="blocked-accounts" options={{ headerShown: false }} />
-        <Stack.Screen name="help" options={{ headerShown: false }} />
-        <Stack.Screen name="terms" options={{ headerShown: false }} />
-        <Stack.Screen name="privacy" options={{ headerShown: false }} />
-        <Stack.Screen name="followers/[userId]" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/register" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/email-verification" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/onboarding-fullname" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/onboarding-username" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/onboarding-avatar-bio" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/onboarding-find-friends" options={{ headerShown: false }} />
-        <Stack.Screen name="admin" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/users" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="dark" />
-    </>
-  );
-}
-
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AppProvider>
-          <ToastProvider>
-            <RootLayoutNav />
-          </ToastProvider>
-        </AppProvider>
-      </ThemeProvider>
+      <AppProvider>
+        <ToastProvider>
+          <AuthGuard />
+          <Stack
+          screenOptions={{
+            contentStyle: { backgroundColor: AppColors.background },
+            animation: 'fade',
+            animationDuration: 200,
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="message" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="story/create" options={{ headerShown: false }} />
+          <Stack.Screen name="story/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="change-password" options={{ headerShown: false }} />
+          <Stack.Screen name="change-password/verify" options={{ headerShown: false }} />
+          <Stack.Screen name="blocked-accounts" options={{ headerShown: false }} />
+          <Stack.Screen name="help" options={{ headerShown: false }} />
+          <Stack.Screen name="terms" options={{ headerShown: false }} />
+          <Stack.Screen name="privacy" options={{ headerShown: false }} />
+          <Stack.Screen name="followers/[userId]" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/email-verification" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/onboarding-fullname" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/onboarding-username" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/onboarding-avatar-bio" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/onboarding-find-friends" options={{ headerShown: false }} />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
+          <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+          <Stack.Screen name="admin/users" options={{ headerShown: false }} />
+          <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="dark" />
+        </ToastProvider>
+      </AppProvider>
+    </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

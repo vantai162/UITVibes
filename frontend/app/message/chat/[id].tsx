@@ -35,6 +35,12 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../../context/AppContext';
 import * as api from '../../../services/api';
+import {
+  addMemberToGroup,
+  removeMemberFromGroup,
+  leaveGroup,
+  getConversationById,
+} from '../../../services/messageService';
 import { invokeHub } from '../../../services/signalrService';
 import { Avatar } from '../../../components/Avatar';
 import { ConfirmationModal } from '../../../components/ConfirmationModal';
@@ -64,9 +70,6 @@ export default function ChatScreen() {
     isUserOnline,
     editMessage,
     deleteMessage,
-    addGroupMember,
-    removeGroupMember,
-    leaveGroupConversation,
     refreshConversations,
   } = useApp();
 
@@ -96,10 +99,17 @@ export default function ChatScreen() {
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     | { type: 'remove'; member: any }
     | { type: 'leave' }
     | { type: 'deleteMessage'; messageId: string }
+    | null
+  >(null);
+  const [localConfirmAction, setLocalConfirmAction] = useState<
+    | { type: 'remove'; member: any }
+    | { type: 'leave' }
     | null
   >(null);
 
@@ -141,9 +151,9 @@ export default function ChatScreen() {
     if (!conversation) return;
     setConvMembers(conversation.members);
     loadMessages(conversation.id)
-      .then(async () => {
-        await new Promise((r) => setTimeout(r, 0));
-        await markMessagesRead(conversation.id);
+      .then(async (loadedMessages) => {
+        const lastMessage = loadedMessages[loadedMessages.length - 1];
+        await markMessagesRead(conversation.id, lastMessage?.id);
       })
       .catch(() => {});
   }, [id, conversation?.id]);
@@ -171,6 +181,9 @@ export default function ChatScreen() {
   // ── Scroll helpers ─────────────────────────────────────────────────────
   const userScrolledUpRef = useRef(false);
   const initialScrollDoneRef = useRef(false);
+  const pendingOwnMessageScrollRef = useRef(false);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const scrollToBottomThreshold = 240;
 
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current) {
@@ -178,17 +191,69 @@ export default function ChatScreen() {
     }
   }, []);
 
+  const markAtBottom = useCallback(() => {
+    userScrolledUpRef.current = false;
+    setShowScrollToBottomButton(false);
+  }, []);
+
+  const scheduleScrollToBottom = useCallback(
+    (animated = true) => {
+      requestAnimationFrame(() => {
+        scrollToBottom(animated);
+        markAtBottom();
+      });
+    },
+    [markAtBottom, scrollToBottom],
+  );
+
   useEffect(() => {
     userScrolledUpRef.current = false;
     initialScrollDoneRef.current = false;
+    pendingOwnMessageScrollRef.current = false;
+    lastMessageIdRef.current = null;
+    setShowScrollToBottomButton(false);
   }, [id]);
 
   useEffect(() => {
     if (messages.length > 0 && !initialScrollDoneRef.current) {
       scrollToBottom(false);
       initialScrollDoneRef.current = true;
+      markAtBottom();
     }
-  }, [messages.length, scrollToBottom, id]);
+  }, [messages.length, markAtBottom, scrollToBottom, id]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+
+    const isNewLastMessage = lastMessage.id !== lastMessageIdRef.current;
+    lastMessageIdRef.current = lastMessage.id;
+
+    if (
+      isNewLastMessage &&
+      pendingOwnMessageScrollRef.current &&
+      lastMessage.senderId === currentUser?.id
+    ) {
+      pendingOwnMessageScrollRef.current = false;
+      scheduleScrollToBottom(true);
+    }
+  }, [currentUser?.id, messages, scheduleScrollToBottom]);
+
+  const handleMessagesScroll = useCallback((event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    const shouldShowButton = distanceFromBottom > scrollToBottomThreshold;
+
+    userScrolledUpRef.current = shouldShowButton;
+    setShowScrollToBottomButton((current) =>
+      current === shouldShowButton ? current : shouldShowButton,
+    );
+  }, [scrollToBottomThreshold]);
+
+  const handleScrollToBottomPress = useCallback(() => {
+    scheduleScrollToBottom(true);
+  }, [scheduleScrollToBottom]);
 
   // ── Send ───────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -196,9 +261,11 @@ export default function ChatScreen() {
     isSendingRef.current = true;
     const text = messageText.trim();
     setMessageText('');
+    pendingOwnMessageScrollRef.current = true;
     try {
       await sendMessage(conversation.id, text);
     } catch (err: any) {
+      pendingOwnMessageScrollRef.current = false;
       setMessageText(text);
       Alert.alert('Error', err?.message ?? 'Failed to send message.');
     } finally {
@@ -211,9 +278,13 @@ export default function ChatScreen() {
       if (!conversation) return;
       setAddingMemberId(userId);
       try {
-        const updated = await addGroupMember(conversation.id, userId);
-        if (updated) setConvMembers(updated.members);
+        await addMemberToGroup(conversation.id, userId);
         await refreshConversations();
+        // Reload conversation to get updated members list
+        const updated = await getConversationById(conversation.id);
+        if (updated) {
+          setConvMembers(updated.members);
+        }
         setShowAddMember(false);
         setFriendSearch('');
       } catch (err: any) {
@@ -225,12 +296,12 @@ export default function ChatScreen() {
         setAddingMemberId(null);
       }
     },
-    [addGroupMember, conversation, refreshConversations],
+    [conversation, refreshConversations],
   );
 
   const handleRemoveMember = useCallback(
     (member: any) => {
-      setConfirmAction({ type: 'remove', member });
+      setLocalConfirmAction({ type: 'remove', member });
     },
     [],
   );
@@ -240,10 +311,14 @@ export default function ChatScreen() {
       if (!conversation) return;
       setRemovingMemberId(member.id);
       try {
-        const updated = await removeGroupMember(conversation.id, member.id);
-        if (updated) setConvMembers(updated.members);
+        await removeMemberFromGroup(conversation.id, member.id);
         await refreshConversations();
-        setConfirmAction(null);
+        // Reload conversation to get updated members list
+        const updated = await getConversationById(conversation.id);
+        if (updated) {
+          setConvMembers(updated.members);
+        }
+        setLocalConfirmAction(null);
       } catch (err: any) {
         Alert.alert(
           'Error',
@@ -253,20 +328,20 @@ export default function ChatScreen() {
         setRemovingMemberId(null);
       }
     },
-    [conversation, refreshConversations, removeGroupMember],
+    [conversation, refreshConversations],
   );
 
   const handleLeaveGroup = useCallback(() => {
-    setConfirmAction({ type: 'leave' });
+    setLocalConfirmAction({ type: 'leave' });
   }, []);
 
   const performLeaveGroup = useCallback(async () => {
     if (!conversation) return;
     setIsLeavingGroup(true);
     try {
-      await leaveGroupConversation(conversation.id);
+      await leaveGroup(conversation.id);
       await refreshConversations();
-      setConfirmAction(null);
+      setLocalConfirmAction(null);
       setShowGroupSettings(false);
       router.back();
     } catch (err: any) {
@@ -277,15 +352,17 @@ export default function ChatScreen() {
     } finally {
       setIsLeavingGroup(false);
     }
-  }, [conversation, leaveGroupConversation, refreshConversations, router]);
+  }, [conversation, refreshConversations, router]);
 
   const handleSendDirect = useCallback(
     async (text: string) => {
       if (!conversation || isSendingRef.current) return;
       isSendingRef.current = true;
+      pendingOwnMessageScrollRef.current = true;
       try {
         await sendMessage(conversation.id, text);
       } catch (err: any) {
+        pendingOwnMessageScrollRef.current = false;
         Alert.alert('Error', err?.message ?? 'Failed to send message.');
       } finally {
         isSendingRef.current = false;
@@ -302,6 +379,47 @@ export default function ChatScreen() {
     return conversation.members.find((m: any) => m.id === senderId);
   };
 
+  const shouldShowTimeDivider = (currentMessage: any, previousMessage?: any) => {
+    if (!currentMessage?.createdAt) return false;
+    const currentTime = new Date(currentMessage.createdAt).getTime();
+    if (Number.isNaN(currentTime)) return false;
+
+    if (!previousMessage?.createdAt) return true;
+
+    const previousTime = new Date(previousMessage.createdAt).getTime();
+
+    if (Number.isNaN(previousTime)) return false;
+
+    return currentTime - previousTime >= 30 * 60 * 1000;
+  };
+
+  const isSameCalendarDay = (left: Date, right: Date) =>
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate();
+
+  const formatMessageClockTime = (date: Date) =>
+    date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const formatMessageSectionTime = (createdAt: string) => {
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (isSameCalendarDay(date, today)) {
+      return `Today, ${formatMessageClockTime(date)}`;
+    }
+
+    if (isSameCalendarDay(date, yesterday)) {
+      return `Yesterday, ${formatMessageClockTime(date)}`;
+    }
+
+    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${formatMessageClockTime(date)}`;
+  };
+
   // ── Render: Message Bubble ────────────────────────────────────────────────
   const renderMessageBubble = ({
     item,
@@ -311,11 +429,36 @@ export default function ChatScreen() {
     index: number;
   }): React.JSX.Element => {
     const mine = isCurrentUser(item.senderId);
+    const previousMessage = messages[index - 1];
+    const nextMessage = messages[index + 1];
+    const showTimeDivider = shouldShowTimeDivider(item, previousMessage);
+    const nextHasTimeDivider = nextMessage
+      ? shouldShowTimeDivider(nextMessage, item)
+      : false;
+    const groupedWithPrevious =
+      !showTimeDivider && previousMessage?.senderId === item.senderId;
+    const groupedWithNext =
+      !nextHasTimeDivider && nextMessage?.senderId === item.senderId;
+    const startsSenderGroup = !groupedWithPrevious;
+    const showMessageTime = selectedMessageId === item.id;
     const senderFromMembers = getSenderFromMembers(item.senderId);
     const sender = senderFromMembers ?? item.sender;
-    const showAvatar =
-      !mine &&
-      (index === 0 || messages[index - 1]?.senderId !== item.senderId);
+    const showAvatar = !mine && startsSenderGroup;
+    const bubbleGroupStyle = mine
+      ? groupedWithPrevious && groupedWithNext
+        ? styles.bubbleMineMiddle
+        : groupedWithNext
+          ? styles.bubbleMineFirst
+          : groupedWithPrevious
+            ? styles.bubbleMineLast
+            : styles.bubbleMineSingle
+      : groupedWithPrevious && groupedWithNext
+        ? styles.bubbleTheirsMiddle
+        : groupedWithNext
+          ? styles.bubbleTheirsFirst
+          : groupedWithPrevious
+            ? styles.bubbleTheirsLast
+            : styles.bubbleTheirsSingle;
 
     const handleLongPress = () => {
       if (mine) {
@@ -324,55 +467,84 @@ export default function ChatScreen() {
     };
 
     return (
-      <View style={[styles.messageRow, mine && styles.messageRowMine]}>
-        {!mine && (
-          <View style={styles.msgAvatarContainer}>
-            {showAvatar ? (
-              <Avatar
-                user={sender ?? ({ id: item.senderId, username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as any)}
-                size="tiny"
-                showOnlineIndicator={true}
-                isOnline={isUserOnline(item.senderId)}
-              />
-            ) : (
-              <View style={styles.msgAvatarPlaceholder} />
-            )}
+      <View>
+        {showTimeDivider && (
+          <View style={styles.timeDivider}>
+            <View style={styles.timeDividerPill}>
+              <Text style={styles.timeDividerText}>
+                {formatMessageSectionTime(item.createdAt)}
+              </Text>
+            </View>
           </View>
         )}
-        <Pressable
-          onLongPress={handleLongPress}
-          delayLongPress={500}
-          style={({ pressed }) => [
-            styles.bubbleContainer,
-            mine ? styles.bubbleContainerMine : styles.bubbleContainerTheirs,
-            pressed && styles.bubblePressed,
+        <View
+          style={[
+            styles.messageRow,
+            mine && styles.messageRowMine,
+            groupedWithPrevious && styles.messageRowGrouped,
+            showTimeDivider && styles.messageRowAfterDivider,
           ]}
         >
-          {!mine && showAvatar && (
-            <Text style={styles.senderName}>
-              {sender?.displayName || sender?.username || 'User'}
-            </Text>
+          {!mine && (
+            <View style={styles.msgAvatarContainer}>
+              {showAvatar ? (
+                <Avatar
+                  user={sender ?? ({ id: item.senderId, username: '', displayName: '', avatar: '', bio: '', followers: 0, following: 0, posts: 0, isVerified: false } as any)}
+                  size="tiny"
+                  showOnlineIndicator={true}
+                  isOnline={isUserOnline(item.senderId)}
+                />
+              ) : (
+                <View style={styles.msgAvatarPlaceholder} />
+              )}
+            </View>
           )}
-          <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-            {item.text ? (
-              <Text style={[styles.messageText, mine && styles.messageTextMine]}>
-                {item.text}
+          <Pressable
+            onPress={() => {
+              setSelectedMessageId((current) => (current === item.id ? null : item.id));
+            }}
+            onLongPress={handleLongPress}
+            delayLongPress={500}
+            style={({ pressed }) => [
+              styles.bubbleContainer,
+              mine ? styles.bubbleContainerMine : styles.bubbleContainerTheirs,
+              pressed && styles.bubblePressed,
+            ]}
+          >
+            {!mine && showAvatar && (
+              <Text style={styles.senderName}>
+                {sender?.displayName || sender?.username || 'User'}
               </Text>
-            ) : item.image ? (
-              <Image
-                source={{ uri: item.image }}
-                style={styles.messageImage}
-                resizeMode="cover"
-              />
-            ) : null}
-          </View>
-          <View style={[styles.msgMeta, mine && styles.msgMetaMine]}>
-            <Text style={styles.msgTime}>
-              {item.editedAt ? 'Edited - ' : ''}
-              {formatDistanceToNow(new Date(item.createdAt))}
-            </Text>
-          </View>
-        </Pressable>
+            )}
+            <View
+              style={[
+                styles.bubble,
+                mine ? styles.bubbleMine : styles.bubbleTheirs,
+                bubbleGroupStyle,
+              ]}
+            >
+              {item.text ? (
+                <Text style={[styles.messageText, mine && styles.messageTextMine]}>
+                  {item.text}
+                </Text>
+              ) : item.image ? (
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
+            {showMessageTime && (
+              <View style={[styles.msgMeta, mine && styles.msgMetaMine]}>
+                <Text style={styles.msgTime}>
+                  {item.editedAt ? 'Edited - ' : ''}
+                  {formatDistanceToNow(new Date(item.createdAt))}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       </View>
     );
   };
@@ -406,48 +578,18 @@ export default function ChatScreen() {
     [conversation, deleteMessage],
   );
 
-  const confirmTitle =
-    confirmAction?.type === 'remove'
-      ? 'Remove member?'
-      : confirmAction?.type === 'deleteMessage'
-        ? 'Delete message?'
-        : 'Leave group?';
-  const confirmMessage =
-    confirmAction?.type === 'remove'
-      ? `Remove ${
-          confirmAction.member.displayName ||
-          confirmAction.member.username ||
-          'this member'
-        } from this group?`
-      : confirmAction?.type === 'deleteMessage'
-        ? 'This message will be permanently deleted.'
-        : 'You will stop receiving messages from this group.';
-  const confirmIcon =
-    confirmAction?.type === 'remove'
-      ? 'user-minus'
-      : confirmAction?.type === 'deleteMessage'
-        ? 'trash-2'
-        : 'log-out';
-  const confirmLabel =
-    confirmAction?.type === 'remove'
-      ? 'Remove'
-      : confirmAction?.type === 'deleteMessage'
-        ? 'Delete'
-        : 'Leave';
-  const confirmationBusy =
-    removingMemberId != null || isLeavingGroup || deletingMessageId != null;
+  const confirmTitle = 'Delete message?';
+  const confirmMessage = 'This message will be permanently deleted.';
+  const confirmIcon = 'trash-2';
+  const confirmLabel = 'Delete';
+  const confirmationBusy = deletingMessageId != null;
 
   const handleConfirmAction = () => {
     if (!confirmAction) return;
-    if (confirmAction.type === 'remove') {
-      void performRemoveMember(confirmAction.member);
-      return;
-    }
     if (confirmAction.type === 'deleteMessage') {
       void performDeleteMessage(confirmAction.messageId);
       return;
     }
-    void performLeaveGroup();
   };
 
   const handleEditSave = async (text: string) => {
@@ -458,7 +600,6 @@ export default function ChatScreen() {
   if (!conversation) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.centerState}>
           <Text style={styles.emptyChatTitle}>Conversation not found</Text>
           <TouchableOpacity onPress={() => router.back()}>
@@ -471,7 +612,6 @@ export default function ChatScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Chat Header */}
         <View style={styles.chatHeader}>
@@ -539,14 +679,8 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
-            onScrollBeginDrag={() => {
-              userScrolledUpRef.current = true;
-            }}
-            onContentSizeChange={() => {
-              if (!userScrolledUpRef.current) {
-                scrollToBottom(true);
-              }
-            }}
+            onScroll={handleMessagesScroll}
+            scrollEventThrottle={16}
             ListEmptyComponent={
               <View style={styles.centerState}>
                 <Feather name="message-circle" size={48} color={AppColors.iconMuted} strokeWidth={1.5} />
@@ -567,6 +701,19 @@ export default function ChatScreen() {
               {otherUser ? otherUser.displayName : 'Someone'} is typing...
             </Text>
           </View>
+        )}
+
+        {showScrollToBottomButton && (
+          <TouchableOpacity
+            style={[
+              styles.scrollToBottomButton,
+              { bottom: Math.max(insets.bottom, 10) + 74 },
+            ]}
+            onPress={handleScrollToBottomPress}
+            activeOpacity={0.8}
+          >
+            <Feather name="arrow-down" size={20} color={AppColors.text} strokeWidth={2.4} />
+          </TouchableOpacity>
         )}
 
         {/* Message Input */}
@@ -651,15 +798,29 @@ export default function ChatScreen() {
           animationType="slide"
           onRequestClose={() => setShowGroupSettings(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.settingsSheet}>
-              <View style={styles.settingsSheetHeader}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowGroupSettings(false)}
+          >
+            <View
+              style={styles.settingsSheet}
+              onStartShouldSetResponder={() => true}
+            >
+              <TouchableOpacity
+                style={styles.settingsSheetHeader}
+                onPress={() => setShowGroupSettings(false)}
+                activeOpacity={0.9}
+              >
                 <Text style={styles.settingsSheetTitle}>{headerName}</Text>
-                <TouchableOpacity onPress={() => setShowGroupSettings(false)}>
-                  <Feather name="x" size={22} color={AppColors.text} strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.settingsContent}>
+                <Feather name="x" size={22} color={AppColors.text} strokeWidth={2} />
+              </TouchableOpacity>
+
+              <ScrollView
+                style={styles.settingsContent}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.settingsContentContainer}
+              >
                 <Text style={styles.sectionLabel}>Members ({convMembers.length})</Text>
                 {convMembers.map((member) => {
                   const memberIsAdmin = conversation.adminIds?.includes(member.id) ?? false;
@@ -698,49 +859,85 @@ export default function ChatScreen() {
                     </View>
                   );
                 })}
-                <View style={styles.settingsActions}>
-                  {isAdmin && (
-                    <TouchableOpacity
-                      style={styles.actionRow}
-                      onPress={() => {
-                        setFriendSearch('');
-                        setShowAddMember(true);
-                      }}
-                      disabled={isLeavingGroup}
-                    >
-                      <Feather name="user-plus" size={20} color={AppColors.text} strokeWidth={2} />
-                      <Text style={styles.actionText}>Add member</Text>
-                      <Feather name="chevron-right" size={20} color={AppColors.textMuted} strokeWidth={2} />
-                    </TouchableOpacity>
-                  )}
+              </ScrollView>
 
+              <View style={styles.settingsActions}>
+                {isAdmin && (
                   <TouchableOpacity
                     style={styles.actionRow}
-                    onPress={handleLeaveGroup}
-                    disabled={isLeavingGroup || removingMemberId != null}
+                    onPress={() => {
+                      setFriendSearch('');
+                      setShowGroupSettings(false);
+                      setTimeout(() => setShowAddMember(true), 50);
+                    }}
+                    disabled={isLeavingGroup}
+                    activeOpacity={0.7}
                   >
-                    {isLeavingGroup ? (
-                      <ActivityIndicator size="small" color="#dc3545" />
-                    ) : (
-                      <Feather name="log-out" size={20} color="#dc3545" strokeWidth={2} />
-                    )}
-                    <Text style={styles.leaveGroupText}>Leave group</Text>
+                    <Feather name="user-plus" size={20} color={AppColors.text} strokeWidth={2} />
+                    <Text style={styles.actionText}>Add member</Text>
+                    <Feather name="chevron-right" size={20} color={AppColors.textMuted} strokeWidth={2} />
                   </TouchableOpacity>
-                </View>
-              </ScrollView>
+                )}
+
+                <TouchableOpacity
+                  style={styles.actionRow}
+                  onPress={handleLeaveGroup}
+                  disabled={isLeavingGroup || removingMemberId != null}
+                  activeOpacity={0.7}
+                >
+                  {isLeavingGroup ? (
+                    <ActivityIndicator size="small" color="#dc3545" />
+                  ) : (
+                    <Feather name="log-out" size={20} color="#dc3545" strokeWidth={2} />
+                  )}
+                  <Text style={styles.leaveGroupText}>Leave group</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {/* Local confirmation modal for remove member / leave group — rendered at Modal root level */}
+          {localConfirmAction && (
+            <ConfirmationModal
+              visible={localConfirmAction != null}
+              title={localConfirmAction.type === 'remove' ? 'Remove member?' : 'Leave group?'}
+              message={
+                localConfirmAction.type === 'remove'
+                  ? `Remove ${
+                      localConfirmAction.member.displayName ||
+                      localConfirmAction.member.username ||
+                      'this member'
+                    } from this group?`
+                  : 'You will stop receiving messages from this group.'
+              }
+              icon={localConfirmAction.type === 'remove' ? 'user-minus' : 'log-out'}
+              variant="danger"
+              confirmLabel={localConfirmAction.type === 'remove' ? 'Remove' : 'Leave'}
+              busy={removingMemberId != null || isLeavingGroup}
+              onCancel={() => setLocalConfirmAction(null)}
+              onConfirm={() => {
+                if (localConfirmAction.type === 'remove') {
+                  void performRemoveMember(localConfirmAction.member);
+                } else {
+                  void performLeaveGroup();
+                }
+              }}
+            />
+          )}
         </Modal>
       )}
 
-      {conversation && (
+      {conversation && !showGroupSettings && (
         <Modal
           visible={showAddMember}
           transparent
           animationType="slide"
           onRequestClose={() => setShowAddMember(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
             <View style={styles.settingsSheet}>
               <View style={styles.settingsSheetHeader}>
                 <Text style={styles.settingsSheetTitle}>Add Member</Text>
@@ -762,6 +959,7 @@ export default function ChatScreen() {
               <FlatList
                 data={addableFriends}
                 keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => {
                   const isAdding = addingMemberId === item.id;
                   return (
@@ -803,7 +1001,7 @@ export default function ChatScreen() {
                 }
               />
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
 
@@ -830,6 +1028,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppColors.background,
+    position: 'relative',
   },
   chatHeader: {
     flexDirection: 'row',
@@ -882,8 +1081,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.background,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    maxHeight: '72%',
-    paddingBottom: 20,
+    maxHeight: '85%',
   },
   settingsSheetHeader: {
     flexDirection: 'row',
@@ -901,7 +1099,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingsContent: {
-    paddingBottom: 20,
+    flexGrow: 1,
+  },
+  settingsContentContainer: {
+    paddingBottom: 8,
   },
   sectionLabel: {
     ...Typography.caption,
@@ -940,6 +1141,7 @@ const styles = StyleSheet.create({
   },
   settingsActions: {
     marginTop: 12,
+    paddingBottom: 20,
   },
   actionRow: {
     flexDirection: 'row',
@@ -949,6 +1151,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: AppColors.border,
+    minHeight: 50,
   },
   actionText: {
     ...Typography.body,
@@ -1009,10 +1212,31 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     flexGrow: 1,
   },
+  timeDivider: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  timeDividerPill: {
+    backgroundColor: AppColors.surfaceElevated,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  timeDividerText: {
+    ...Typography.caption,
+    color: AppColors.textMuted,
+    fontSize: 11,
+  },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    marginBottom: 2,
     alignItems: 'flex-end',
+  },
+  messageRowGrouped: {
+    marginBottom: 1,
+  },
+  messageRowAfterDivider: {
+    marginTop: 2,
   },
   messageRowMine: {
     flexDirection: 'row-reverse',
@@ -1047,15 +1271,35 @@ const styles = StyleSheet.create({
   bubble: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 18,
+    borderRadius: 16,
   },
   bubbleMine: {
     backgroundColor: AppColors.primary,
+  },
+  bubbleMineSingle: {},
+  bubbleMineFirst: {
     borderBottomRightRadius: 4,
+  },
+  bubbleMineMiddle: {
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  bubbleMineLast: {
+    borderTopRightRadius: 4,
   },
   bubbleTheirs: {
     backgroundColor: AppColors.surfaceElevated,
+  },
+  bubbleTheirsSingle: {},
+  bubbleTheirsFirst: {
     borderBottomLeftRadius: 4,
+  },
+  bubbleTheirsMiddle: {
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+  },
+  bubbleTheirsLast: {
+    borderTopLeftRadius: 4,
   },
   messageText: {
     ...Typography.body,
@@ -1072,7 +1316,7 @@ const styles = StyleSheet.create({
   msgMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
     gap: 4,
   },
   msgMetaMine: {
@@ -1091,6 +1335,23 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: AppColors.textMuted,
     fontStyle: 'italic',
+  },
+  scrollToBottomButton: {
+    position: 'absolute',
+    left: '50%',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.background,
+    transform: [{ translateX: -21 }],
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 20,
   },
   keyboardAvoid: {
     // Wraps input so it sits flush against the keyboard

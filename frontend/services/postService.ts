@@ -13,7 +13,6 @@ import {
   BE_BookmarkResponse,
 } from "./backendTypes";
 import { fetchUserById } from "./userService";
-import { getAccessToken, API_BASE_URL } from "./httpClient";
 import { getCurrentUser } from "./api";
 import { getCurrentUserId } from "./session";
 
@@ -127,21 +126,17 @@ export async function uploadMedia(
     throw new Error("Unsupported URI scheme for media upload: " + uri);
   }
 
-  const token = await getAccessToken();
-  const res = await fetch(`${API_BASE_URL}/post/media`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData as any,
+  const { data } = await apiClient.post<{
+    url: string;
+    publicId: string;
+    thumbnailUrl?: string;
+    width?: number;
+    height?: number;
+    duration?: number;
+  }>("/post/media", formData as any, {
+    headers: { "Content-Type": "multipart/form-data" } as any,
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Upload failed: ${res.status} ${text}`);
-  }
-
-  const data = await res.json();
   return data;
 }
 
@@ -173,6 +168,7 @@ function transformBEPost(post: BE_PostResponse, author?: User): Post {
     image: allImages[0] ?? "",
     images: allImages,
     caption: post.content,
+    visibility: post.visibility ?? undefined,
     likes: post.likesCount,
     comments: [],
     createdAt: post.createdAt,

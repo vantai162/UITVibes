@@ -21,6 +21,7 @@ import { getConnection } from '../services/signalrService';
 import type { BE_MessageResponse } from '../services/backendTypes';
 import { transformBEMessage } from '../services/messageService';
 import type { Reel as APIReel } from '../services/postService';
+import { clearReelsUserCache } from '../context/reelsUserCache';
 
 interface AppContextType {
   // Auth / User
@@ -747,11 +748,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         await api.toggleFollow(userId);
         await refreshUser();
         await refreshPosts();
+        await refreshReels();
+        // Clear reels user cache so the follow button state refreshes correctly
+        clearReelsUserCache();
       } catch (error) {
         console.error("Failed to toggle follow:", error);
       }
     },
-    [refreshUser, refreshPosts],
+    [refreshUser, refreshPosts, refreshReels],
   );
 
   const updateProfile = useCallback(

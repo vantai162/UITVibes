@@ -235,3 +235,21 @@ export function subscribeToForegroundNotifications(
     handler(message);
   });
 }
+
+export function subscribeToNotificationOpened(
+  handler: (message: PushRemoteMessage) => void,
+): () => void {
+  const messaging = getMessagingModule();
+  if (!messaging) return () => {};
+
+  return messaging().onNotificationOpenedApp((message) => {
+    handler(message);
+  });
+}
+
+export async function getInitialPushNotification(): Promise<PushRemoteMessage | null> {
+  const messaging = getMessagingModule();
+  if (!messaging) return null;
+
+  return messaging().getInitialNotification();
+}

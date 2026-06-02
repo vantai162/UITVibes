@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppColors } from "../constants/theme";
 import { useApp } from "../context/AppContext";
 import {
+  getInitialPushNotification,
+  subscribeToNotificationOpened,
   subscribeToForegroundNotifications,
   type BackendNotificationType,
   type PushRemoteMessage,
@@ -37,13 +39,17 @@ function parseForegroundNotification(
   const type = getStringValue(data.type);
   const entityId = getStringValue(data.entityId);
   const notificationId = getStringValue(data.notificationId);
+  const title =
+    message.notification?.title ||
+    getStringValue(data.title) ||
+    "Notification";
   const body =
     message.notification?.body ||
     getStringValue(data.body) ||
-    getStringValue(data.content);
-  const title = message.notification?.title || "Notification";
+    getStringValue(data.content) ||
+    title;
 
-  if (!body) return null;
+  if (!type && !entityId && !notificationId && !body) return null;
 
   return {
     title,
@@ -52,6 +58,10 @@ function parseForegroundNotification(
     entityId,
     notificationId,
   };
+}
+
+function getPushMessageKey(notification: ForegroundNotification): string {
+  return notification.notificationId || `${notification.type}:${notification.entityId}`;
 }
 
 export function NotificationForegroundBridge() {
@@ -65,6 +75,30 @@ export function NotificationForegroundBridge() {
   } = useApp();
   const [banner, setBanner] = useState<ForegroundNotification | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handledOpenKeysRef = useRef<Set<string>>(new Set());
+
+  const openNotification = useCallback(
+    (notification: ForegroundNotification) => {
+      const key = getPushMessageKey(notification);
+      if (handledOpenKeysRef.current.has(key)) return;
+      handledOpenKeysRef.current.add(key);
+
+      const route = getNotificationRoute({
+        type: notification.type,
+        entityId: notification.entityId,
+      });
+
+      if (notification.notificationId) {
+        void markNotificationRead(notification.notificationId);
+        void refreshNotifications();
+      }
+
+      if (route) {
+        router.push(route as any);
+      }
+    },
+    [markNotificationRead, refreshNotifications, router],
+  );
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -96,21 +130,37 @@ export function NotificationForegroundBridge() {
     };
   }, [handleForegroundNotificationReceived, isAuthenticated, refreshNotifications]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleOpenedMessage = (message: PushRemoteMessage) => {
+      const notification = parseForegroundNotification(message);
+      if (!notification) return;
+
+      setBanner(null);
+      openNotification(notification);
+    };
+
+    const unsubscribe = subscribeToNotificationOpened(handleOpenedMessage);
+
+    void getInitialPushNotification()
+      .then((message) => {
+        if (message) {
+          handleOpenedMessage(message);
+        }
+      })
+      .catch((error) => {
+        console.warn("[Notifications] Failed to handle initial notification", error);
+      });
+
+    return unsubscribe;
+  }, [isAuthenticated, openNotification]);
+
   if (!banner) return null;
 
-  const route = getNotificationRoute({
-    type: banner.type,
-    entityId: banner.entityId,
-  });
-
-  const openNotification = () => {
+  const openBannerNotification = () => {
     setBanner(null);
-    if (banner.notificationId) {
-      void markNotificationRead(banner.notificationId);
-    }
-    if (route) {
-      router.push(route as any);
-    }
+    openNotification(banner);
   };
 
   return (
@@ -121,7 +171,7 @@ export function NotificationForegroundBridge() {
       <TouchableOpacity
         activeOpacity={0.9}
         style={styles.banner}
-        onPress={openNotification}
+        onPress={openBannerNotification}
       >
         <View style={styles.iconWrap}>
           <Feather name="bell" size={18} color={AppColors.primary} />

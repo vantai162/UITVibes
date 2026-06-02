@@ -899,7 +899,7 @@ export async function addReelComment(
       `/post/reel/${reelId}/comment`,
       body,
     );
-    const comment = transformReelComment(data);
+    const comment = await transformReelComment(data);
     return { success: true, comment };
   } catch (error) {
     console.error("[addReelComment] API error:", error);

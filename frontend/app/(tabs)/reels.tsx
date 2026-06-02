@@ -20,7 +20,6 @@ import {
   FlatList,
   Dimensions,
   StatusBar,
-  Alert,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -32,8 +31,6 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from 'react-native-reanimated';
-import { Header } from '../../components';
-import { StaticPremiumHeader } from '../../components/StaticPremiumHeader';
 import { ReelCard, ReelDisplayData } from '../../components/ReelCard';
 import { CommentSheet } from '../../components/CommentSheet';
 import { ShareSheet } from '../../components/ShareSheet';
@@ -43,7 +40,12 @@ import type { Comment as CommentType } from '../../data/mockData';
 import { fetchUserById } from '../../services/userService';
 import { User } from '../../data/mockData';
 import type { Reel as APIReel } from '../../services/postService';
-import { getReelComments, addReelComment, deleteReelComment, toggleReelCommentLike } from '../../services/postService';
+import {
+  getReelComments,
+  addReelComment as createReelComment,
+  deleteReelComment as removeReelComment,
+  toggleReelCommentLike as setReelCommentLike,
+} from '../../services/postService';
 import { TAB_BAR_BOTTOM_OFFSET } from '../../components/ModernTabBar';
 import { reelsUserCache, clearReelsUserCache } from '../../context/reelsUserCache';
 
@@ -109,9 +111,6 @@ export default function ReelsScreen() {
     reels,
     refreshReels,
     toggleReelLike,
-    addReelComment,
-    deleteReelComment,
-    toggleReelCommentLike,
     toggleFollow,
   } = useApp();
 
@@ -279,11 +278,10 @@ export default function ReelsScreen() {
     setReelComments([]);
   }, []);
 
-  // Optimistic update: generate temp ID
-const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
 const handlePostComment = useCallback(async (text: string) => {
   if (selectedReel) {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     // Optimistic: create temp comment immediately
     const optimisticComment: CommentType = {
       id: tempId,
@@ -313,11 +311,23 @@ const handlePostComment = useCallback(async (text: string) => {
     setReelComments((prev) => [optimisticComment, ...prev]);
 
     try {
-      const result = await addReelComment(selectedReel.id, text);
+      const result = await createReelComment(selectedReel.id, text);
       if (result && result.success && result.comment) {
         // Replace temp comment with real one
         setReelComments((prev) =>
           prev.map((c) => (c.id === tempId ? result.comment! : c))
+        );
+        setDisplayReels((prev) =>
+          prev.map((reel) =>
+            reel.id === selectedReel.id
+              ? { ...reel, comments: reel.comments + 1 }
+              : reel
+          )
+        );
+        setSelectedReel((prev) =>
+          prev && prev.id === selectedReel.id
+            ? { ...prev, comments: prev.comments + 1 }
+            : prev
         );
       } else {
         // Remove temp comment if failed
@@ -336,7 +346,8 @@ const handlePostComment = useCallback(async (text: string) => {
     if (!comment) return;
 
     // Optimistic: toggle immediately
-    const newLikedState = !comment.isLiked;
+    const wasLiked = !!comment.isLiked;
+    const newLikedState = !wasLiked;
     setReelComments((prev) =>
       prev.map((c) =>
         c.id === commentId
@@ -346,14 +357,14 @@ const handlePostComment = useCallback(async (text: string) => {
     );
 
     try {
-      await toggleReelCommentLike(commentId, comment.isLiked);
+      await setReelCommentLike(commentId, wasLiked);
     } catch (error) {
       console.error('[Reels] Failed to like comment:', error);
       // Rollback on error
       setReelComments((prev) =>
         prev.map((c) =>
           c.id === commentId
-            ? { ...c, isLiked: comment.isLiked, likes: comment.likes }
+            ? { ...c, isLiked: wasLiked, likes: comment.likes }
             : c
         )
       );
@@ -369,7 +380,7 @@ const handlePostComment = useCallback(async (text: string) => {
     setReelComments((prev) => prev.filter((c) => c.id !== commentId));
 
     try {
-      await deleteReelComment(commentId);
+      await removeReelComment(commentId);
     } catch (error) {
       console.error('[Reels] Failed to delete comment:', error);
       // Rollback: restore comment
@@ -457,7 +468,7 @@ const handlePostComment = useCallback(async (text: string) => {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark" backgroundColor="#000" />
+      <StatusBar barStyle="dark-content" backgroundColor="#000" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header - để trong suốt vì nền reels là đen */}
         <View style={styles.reelsHeader}>

@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  Alert,
   ScrollView,
   Pressable,
   Platform,
@@ -233,10 +232,6 @@ export default function CreateScreen() {
 
   const typeLabel = createType === 'reels' ? 'Reels' : 'Post';
   const shareReady = selectedMedia.length > 0 && !!caption.trim() && !isPosting;
-  const optionsDisabled = selectedMedia.length === 0;
-
-  const mockOption = (title: string) => () =>
-    Alert.alert(title, 'This option will be available in a future update.');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -483,43 +478,11 @@ export default function CreateScreen() {
           <Text style={styles.optionsHeading}>More options</Text>
           <View style={styles.optionsCard}>
             <OptionRow
-              icon="user-plus"
-              label="Tag people"
-              disabled={optionsDisabled}
-              onPress={mockOption('Tag people')}
-            />
-            <View style={styles.optionSeparator} />
-            <OptionRow
-              icon="map-pin"
-              label="Add location"
-              disabled={optionsDisabled}
-              onPress={mockOption('Location')}
-            />
-            <View style={styles.optionSeparator} />
-            <OptionRow
-              icon="hash"
-              label="Add topics"
-              disabled={optionsDisabled}
-              onPress={mockOption('Topics')}
-            />
-            <View style={styles.optionSeparator} />
-            <OptionRow
               icon={selectedVisibility === 'Public' ? 'globe' : selectedVisibility === 'Followers' ? 'users' : 'lock'}
               label={`Visibility: ${selectedVisibility}`}
               disabled={false}
               onPress={() => setShowVisibilityPicker(true)}
             />
-            {createType === 'reels' && (
-              <>
-                <View style={styles.optionSeparator} />
-                <OptionRow
-                  icon="music"
-                  label="Add music"
-                  disabled={optionsDisabled}
-                  onPress={mockOption('Music')}
-                />
-              </>
-            )}
           </View>
         </View>
       </ScrollView>

@@ -728,9 +728,6 @@ export default function ChatScreen() {
               { paddingBottom: Math.max(insets.bottom, 10) },
             ]}
           >
-            <TouchableOpacity style={styles.attachBtn}>
-              <Feather name="smile" size={22} color={AppColors.iconMuted} strokeWidth={2} />
-            </TouchableOpacity>
             <TextInput
               style={styles.messageInput}
               placeholder="Message..."
@@ -761,17 +758,13 @@ export default function ChatScreen() {
               multiline
               maxLength={4000}
             />
-            {messageText.length > 0 ? (
+            {messageText.length > 0 && (
               <TouchableOpacity
                 onPress={handleSend}
                 style={styles.sendBtn}
                 disabled={isLoadingMessages}
               >
                 <Feather name="send" size={22} color={AppColors.primary} strokeWidth={2} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.attachBtn}>
-                <Feather name="camera" size={22} color={AppColors.iconMuted} strokeWidth={2} />
               </TouchableOpacity>
             )}
           </View>
@@ -1365,9 +1358,6 @@ const styles = StyleSheet.create({
     borderTopColor: AppColors.border,
     backgroundColor: AppColors.surfaceElevated,
     gap: 8,
-  },
-  attachBtn: {
-    padding: 4,
   },
   sendBtn: {
     padding: 4,

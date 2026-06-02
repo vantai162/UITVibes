@@ -50,6 +50,7 @@ import { EditMessageModal } from '../../../components/EditMessageModal';
 import { formatDistanceToNow } from '../../../utils/time';
 import { AppColors, layoutPadding } from '../../../constants/theme';
 import { Typography } from '../../../constants/typography';
+import type { Conversation } from '../../../data/mockData';
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -101,6 +102,9 @@ export default function ChatScreen() {
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
+  const [routeConversation, setRouteConversation] = useState<Conversation | null>(null);
+  const [isLoadingRouteConversation, setIsLoadingRouteConversation] = useState(false);
+  const [routeConversationError, setRouteConversationError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     | { type: 'remove'; member: any }
     | { type: 'leave' }
@@ -113,8 +117,46 @@ export default function ChatScreen() {
     | null
   >(null);
 
-  // Find the conversation from the global list by id
-  const conversation = conversations.find((c) => c.id === id) ?? null;
+  // Prefer the global conversation list, but support direct opens from notifications.
+  const listConversation = conversations.find((c) => c.id === id) ?? null;
+  const conversation = listConversation ?? routeConversation;
+
+  useEffect(() => {
+    setRouteConversation(null);
+    setRouteConversationError(null);
+    setIsLoadingRouteConversation(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || listConversation || routeConversation?.id === id) return;
+
+    let cancelled = false;
+    setIsLoadingRouteConversation(true);
+    setRouteConversationError(null);
+
+    getConversationById(id)
+      .then((loadedConversation) => {
+        if (cancelled) return;
+        setRouteConversation(loadedConversation ?? null);
+        if (!loadedConversation) {
+          setRouteConversationError('Conversation not found');
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setRouteConversation(null);
+        setRouteConversationError(
+          error?.response?.data?.message ?? error?.message ?? 'Conversation not found',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingRouteConversation(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, listConversation, routeConversation?.id]);
 
   // ── Set activeConversation so AppContext SignalR listeners fire ─────
   useEffect(() => {
@@ -181,8 +223,10 @@ export default function ChatScreen() {
   // ── Scroll helpers ─────────────────────────────────────────────────────
   const userScrolledUpRef = useRef(false);
   const initialScrollDoneRef = useRef(false);
+  const pendingInitialScrollRef = useRef(false);
   const pendingOwnMessageScrollRef = useRef(false);
   const lastMessageIdRef = useRef<string | null>(null);
+  const initialScrollTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const scrollToBottomThreshold = 240;
 
   const scrollToBottom = useCallback((animated = true) => {
@@ -206,22 +250,47 @@ export default function ChatScreen() {
     [markAtBottom, scrollToBottom],
   );
 
+  const clearInitialScrollTimers = useCallback(() => {
+    initialScrollTimersRef.current.forEach(clearTimeout);
+    initialScrollTimersRef.current = [];
+  }, []);
+
+  const forceInitialScrollToBottom = useCallback(() => {
+    clearInitialScrollTimers();
+    pendingInitialScrollRef.current = true;
+
+    [0, 50, 150, 300].forEach((delay, index, delays) => {
+      const timer = setTimeout(() => {
+        scrollToBottom(false);
+        markAtBottom();
+
+        if (index === delays.length - 1) {
+          pendingInitialScrollRef.current = false;
+        }
+      }, delay);
+
+      initialScrollTimersRef.current.push(timer);
+    });
+  }, [clearInitialScrollTimers, markAtBottom, scrollToBottom]);
+
   useEffect(() => {
     userScrolledUpRef.current = false;
     initialScrollDoneRef.current = false;
+    pendingInitialScrollRef.current = false;
     pendingOwnMessageScrollRef.current = false;
     lastMessageIdRef.current = null;
+    clearInitialScrollTimers();
     setShowScrollToBottomButton(false);
-  }, [id]);
+  }, [clearInitialScrollTimers, id]);
 
   useEffect(() => {
     if (messages.length > 0 && !initialScrollDoneRef.current) {
-      scrollToBottom(false);
+      forceInitialScrollToBottom();
       initialScrollDoneRef.current = true;
       lastMessageIdRef.current = messages[messages.length - 1]?.id ?? null;
       markAtBottom();
     }
-  }, [messages.length, markAtBottom, scrollToBottom, id]);
+  }, [forceInitialScrollToBottom, messages.length, markAtBottom, id]);
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -257,6 +326,14 @@ export default function ChatScreen() {
   const handleScrollToBottomPress = useCallback(() => {
     scheduleScrollToBottom(true);
   }, [scheduleScrollToBottom]);
+
+  const handleMessagesContentSizeChange = useCallback(() => {
+    if (!pendingInitialScrollRef.current) return;
+
+    forceInitialScrollToBottom();
+  }, [forceInitialScrollToBottom]);
+
+  useEffect(() => () => clearInitialScrollTimers(), [clearInitialScrollTimers]);
 
   // ── Send ───────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -604,10 +681,22 @@ export default function ChatScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyChatTitle}>Conversation not found</Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.emptyChatSubtitle}>Go back</Text>
-          </TouchableOpacity>
+          {isLoadingRouteConversation ? (
+            <>
+              <ActivityIndicator size="large" color={AppColors.primary} />
+              <Text style={styles.loadingText}>Opening conversation...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emptyChatTitle}>Conversation not found</Text>
+              {routeConversationError && (
+                <Text style={styles.emptyChatSubtitle}>{routeConversationError}</Text>
+              )}
+              <TouchableOpacity onPress={() => router.back()}>
+                <Text style={styles.emptyChatSubtitle}>Go back</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -683,6 +772,8 @@ export default function ChatScreen() {
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
             onScroll={handleMessagesScroll}
+            onLayout={handleMessagesContentSizeChange}
+            onContentSizeChange={handleMessagesContentSizeChange}
             scrollEventThrottle={16}
             ListEmptyComponent={
               <View style={styles.centerState}>

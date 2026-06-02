@@ -15,22 +15,25 @@ namespace NotificationService.ServiceLayer.Implementation
         }
         public async Task RegisterAsync(Guid userId, string token, DevicePlatform platform, CancellationToken ct = default)
         {
+            if (userId == Guid.Empty)
+            {
+                throw new InvalidOperationException("A valid user id is required to register a device token.");
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new ArgumentException("Device token is required.", nameof(token));
+            }
+
             // Token đã tồn tại chưa (có thể của user khác khi đổi thiết bị)
             var existing = await _db.DeviceTokens
                 .FirstOrDefaultAsync(x => x.Token == token, ct);
 
             if (existing is not null)
             {
-                // Token đã thuộc về user này rồi → chỉ cần refresh LastUsedAt
-                if (existing.UserId == userId)
-                {
-                    existing.Refresh(token);
-                    await _db.SaveChangesAsync(ct);
-                    return;
-                }
-
-                // Token thuộc user cũ (đổi thiết bị) → deactivate rồi tạo mới
-                existing.Deactivate();
+                existing.Reassign(userId, token, platform);
+                await _db.SaveChangesAsync(ct);
+                return;
             }
 
             _db.DeviceTokens.Add(DeviceToken.Create(userId, token, platform));

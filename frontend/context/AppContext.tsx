@@ -141,13 +141,20 @@ interface AppContextType {
   // Notifications
   notifications: Notification[];
   unreadCount: number;
+  notificationPage: number;
+  notificationTotalPages: number;
+  notificationTotalCount: number;
+  notificationHasNext: boolean;
+  isRefreshingNotifications: boolean;
+  notificationError: string | null;
   pushNotificationsEnabled: boolean;
   isUpdatingPushNotifications: boolean;
   pushNotificationPermission: "unknown" | "granted" | "denied";
-  refreshNotifications: () => Promise<void>;
+  refreshNotifications: (page?: number) => Promise<void>;
   refreshNotificationSettings: () => Promise<void>;
   setPushNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
   registerPushDevice: () => Promise<boolean>;
+  handleForegroundNotificationReceived: () => void;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
 
@@ -169,6 +176,8 @@ export const useApp = (): AppContextType => {
 interface AppProviderProps {
   children: ReactNode;
 }
+
+const NOTIFICATION_PAGE_SIZE = 20;
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ─── Auth / User ────────────────────────────────────────
@@ -306,6 +315,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setConversations([]);
     setNotifications([]);
     setUnreadCount(0);
+    setNotificationPage(1);
+    notificationPageRef.current = 1;
+    setNotificationTotalPages(1);
+    setNotificationTotalCount(0);
+    setNotificationHasNext(false);
+    setNotificationError(null);
     setPushNotificationsEnabledState(false);
     setPushNotificationPermission("unknown");
   }, []);
@@ -406,6 +421,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ─── Notifications ───────────────────────────────────────
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [notificationTotalPages, setNotificationTotalPages] = useState(1);
+  const [notificationTotalCount, setNotificationTotalCount] = useState(0);
+  const [notificationHasNext, setNotificationHasNext] = useState(false);
+  const [isRefreshingNotifications, setIsRefreshingNotifications] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const notificationPageRef = useRef(1);
   const [pushNotificationsEnabled, setPushNotificationsEnabledState] = useState(false);
   const [isUpdatingPushNotifications, setIsUpdatingPushNotifications] = useState(false);
   const [pushNotificationPermission, setPushNotificationPermission] =
@@ -1089,17 +1111,61 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     [],
   );
 
-  const refreshNotifications = useCallback(async () => {
-    try {
-      const [notifs, count] = await Promise.all([
-        api.getNotifications(),
-        api.getUnreadNotificationCount(),
-      ]);
-      setNotifications(notifs);
-      setUnreadCount(count);
-    } catch (error) {
+  const loadNotificationsPage = useCallback(async (page: number) => {
+    const safePage = Math.max(1, page);
+
+    setIsRefreshingNotifications(true);
+    setNotificationError(null);
+
+    const [pageResult, countResult] = await Promise.allSettled([
+      api.getNotificationPage(safePage, NOTIFICATION_PAGE_SIZE),
+      api.getUnreadNotificationCount(),
+    ]);
+
+    let nextError: string | null = null;
+
+    if (pageResult.status === "fulfilled") {
+      const pageData = pageResult.value;
+      setNotifications(pageData.items);
+      setNotificationPage(pageData.page);
+      notificationPageRef.current = pageData.page;
+      setNotificationTotalPages(Math.max(1, pageData.totalPages));
+      setNotificationTotalCount(pageData.totalCount);
+      setNotificationHasNext(pageData.hasNext);
+    } else {
+      nextError = "Failed to refresh notifications. Please try again.";
+      console.warn("Failed to refresh notification page:", pageResult.reason);
     }
+
+    if (countResult.status === "fulfilled") {
+      setUnreadCount(countResult.value);
+    } else {
+      nextError = nextError ?? "Failed to refresh notification count.";
+      console.warn("Failed to refresh notification count:", countResult.reason);
+    }
+
+    setNotificationError(nextError);
+    setIsRefreshingNotifications(false);
   }, []);
+
+  const refreshNotifications = useCallback(
+    async (page?: number) => {
+      if (!isAuthenticated) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setNotificationPage(1);
+        notificationPageRef.current = 1;
+        setNotificationTotalPages(1);
+        setNotificationTotalCount(0);
+        setNotificationHasNext(false);
+        setNotificationError(null);
+        return;
+      }
+
+      await loadNotificationsPage(page ?? notificationPageRef.current);
+    },
+    [isAuthenticated, loadNotificationsPage],
+  );
 
   const markNotificationRead = useCallback(async (id: string) => {
     try {
@@ -1136,6 +1202,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const registered = await api.registerDeviceForPushNotifications();
     setPushNotificationPermission(registered ? "granted" : "denied");
     return registered;
+  }, []);
+
+  const handleForegroundNotificationReceived = useCallback(() => {
+    setUnreadCount((prev) => prev + 1);
   }, []);
 
   const setPushNotificationsEnabled = useCallback(
@@ -1190,7 +1260,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             refreshStories(),
             refreshReels(),
             refreshConversations(),
-            refreshNotifications(),
+            loadNotificationsPage(1),
             refreshNotificationSettings(),
             fetchSuggestedUsers(),
           ]);
@@ -1203,7 +1273,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             refreshStories(),
             refreshReels(),
             refreshConversations(),
-            refreshNotifications(),
           ]);
         }
       } catch (error) {
@@ -1214,7 +1283,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           refreshStories(),
           refreshReels(),
           refreshConversations(),
-          refreshNotifications(),
         ]);
       } finally {
         setIsLoading(false);
@@ -1227,7 +1295,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     refreshStories,
     refreshReels,
     refreshConversations,
-    refreshNotifications,
+    loadNotificationsPage,
     refreshNotificationSettings,
     fetchSuggestedUsers,
   ]);
@@ -1235,16 +1303,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const unsubscribeForeground = api.subscribeToForegroundNotifications(() => {
-      void refreshNotifications();
-    });
     const unsubscribeTokenRefresh = api.subscribeToPushTokenRefresh();
 
     return () => {
-      unsubscribeForeground();
       unsubscribeTokenRefresh();
     };
-  }, [isAuthenticated, refreshNotifications]);
+  }, [isAuthenticated]);
 
   // ─── Sync conversationMembers to ref (without triggering listener re-run) ───
   useEffect(() => {
@@ -1575,6 +1639,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         partnerTyping,
         notifications,
         unreadCount,
+        notificationPage,
+        notificationTotalPages,
+        notificationTotalCount,
+        notificationHasNext,
+        isRefreshingNotifications,
+        notificationError,
         pushNotificationsEnabled,
         isUpdatingPushNotifications,
         pushNotificationPermission,
@@ -1582,6 +1652,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         refreshNotificationSettings,
         setPushNotificationsEnabled,
         registerPushDevice,
+        handleForegroundNotificationReceived,
         markNotificationRead,
         markAllNotificationsRead,
         isUserOnline: isOnline,

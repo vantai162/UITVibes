@@ -1,7 +1,5 @@
 import { PermissionsAndroid, Platform } from "react-native";
-import messaging, {
-  FirebaseMessagingTypes,
-} from "@react-native-firebase/messaging";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import apiClient from "./httpClient";
 
 export type BackendNotificationType =
@@ -28,10 +26,15 @@ export interface PagedNotificationResult<T> {
   items: T[];
   Items?: T[];
   totalCount: number;
+  TotalCount?: number;
   page: number;
+  Page?: number;
   pageSize: number;
+  PageSize?: number;
   totalPages: number;
+  TotalPages?: number;
   hasNext: boolean;
+  HasNext?: boolean;
 }
 
 export interface NotificationSettingDto {
@@ -43,6 +46,15 @@ export type Notification = BackendNotificationDto & {
 };
 
 type DevicePlatform = "Android" | "iOS";
+export type PushRemoteMessage = {
+  notification?: {
+    title?: string;
+    body?: string;
+  };
+  data?: Record<string, unknown>;
+};
+
+type MessagingModule = typeof import("@react-native-firebase/messaging").default;
 
 function toNotification(dto: BackendNotificationDto): Notification {
   return {
@@ -55,11 +67,25 @@ function getDevicePlatform(): DevicePlatform {
   return Platform.OS === "ios" ? "iOS" : "Android";
 }
 
+export function isPushRuntimeSupported(): boolean {
+  if (Platform.OS !== "android" && Platform.OS !== "ios") return false;
+  return Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+}
+
+function getMessagingModule(): MessagingModule | null {
+  if (!isPushRuntimeSupported()) return null;
+
+  try {
+    const module = require("@react-native-firebase/messaging");
+    return (module.default ?? module) as MessagingModule;
+  } catch (error) {
+    console.warn("[Notifications] Firebase Messaging is unavailable", error);
+    return null;
+  }
+}
+
 function isPermissionGranted(status: number): boolean {
-  return (
-    status === messaging.AuthorizationStatus.AUTHORIZED ||
-    status === messaging.AuthorizationStatus.PROVISIONAL
-  );
+  return status === 1 || status === 2;
 }
 
 async function requestAndroidNotificationPermission(): Promise<boolean> {
@@ -82,18 +108,37 @@ export async function getNotifications(
   page = 1,
   pageSize = 20,
 ): Promise<Notification[]> {
+  const data = await getNotificationPage(page, pageSize);
+  return data.items;
+}
+
+export async function getNotificationPage(
+  page = 1,
+  pageSize = 20,
+): Promise<PagedNotificationResult<Notification>> {
   const { data } = await apiClient.get<
     PagedNotificationResult<BackendNotificationDto>
   >("/notification", {
     params: { page, pageSize },
   });
 
-  return (data.items ?? data.Items ?? [])
+  const items = (data.items ?? data.Items ?? [])
     .map(toNotification)
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+
+  return {
+    ...data,
+    items,
+    Items: items,
+    totalCount: data.totalCount ?? data.TotalCount ?? items.length,
+    page: data.page ?? data.Page ?? page,
+    pageSize: data.pageSize ?? data.PageSize ?? pageSize,
+    totalPages: data.totalPages ?? data.TotalPages ?? 1,
+    hasNext: data.hasNext ?? data.HasNext ?? false,
+  };
 }
 
 export async function markNotificationRead(
@@ -137,6 +182,9 @@ export async function registerDeviceToken(token: string): Promise<void> {
 
 export async function registerDeviceForPushNotifications(): Promise<boolean> {
   try {
+    const messaging = getMessagingModule();
+    if (!messaging) return false;
+
     const settings = await getNotificationSettings();
     if (!settings.isEnabled) return false;
 
@@ -163,6 +211,9 @@ export async function registerDeviceForPushNotifications(): Promise<boolean> {
 }
 
 export function subscribeToPushTokenRefresh(): () => void {
+  const messaging = getMessagingModule();
+  if (!messaging) return () => {};
+
   return messaging().onTokenRefresh((token) => {
     void (async () => {
       const settings = await getNotificationSettings();
@@ -175,8 +226,11 @@ export function subscribeToPushTokenRefresh(): () => void {
 }
 
 export function subscribeToForegroundNotifications(
-  handler: (message: FirebaseMessagingTypes.RemoteMessage) => void,
+  handler: (message: PushRemoteMessage) => void,
 ): () => void {
+  const messaging = getMessagingModule();
+  if (!messaging) return () => {};
+
   return messaging().onMessage(async (message) => {
     handler(message);
   });

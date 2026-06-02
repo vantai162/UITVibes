@@ -4,9 +4,9 @@
     {
         public Guid Id { get; private set; } = Guid.NewGuid();
 
-        public Guid UserId { get; init; }
+        public Guid UserId { get; private set; }
         public string Token { get; private set; } = string.Empty;
-        public DevicePlatform Platform { get; init; }
+        public DevicePlatform Platform { get; private set; }
 
         public bool IsActive { get; private set; } = true;
         public DateTime LastUsedAt { get; private set; } = DateTime.UtcNow;
@@ -20,6 +20,13 @@
             Token = newToken;
             LastUsedAt = DateTime.UtcNow;
             IsActive = true;
+        }
+
+        public void Reassign(Guid userId, string newToken, DevicePlatform platform)
+        {
+            UserId = userId;
+            Platform = platform;
+            Refresh(newToken);
         }
 
         public void Deactivate() => IsActive = false;

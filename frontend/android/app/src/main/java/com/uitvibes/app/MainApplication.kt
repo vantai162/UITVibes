@@ -1,7 +1,10 @@
 package com.uitvibes.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Application
 import android.content.res.Configuration
+import android.os.Build
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -17,6 +20,8 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
 class MainApplication : Application(), ReactApplication {
+
+  private val notificationChannelId = "uitvibes_default_channel"
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
       this,
@@ -40,6 +45,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    createNotificationChannel()
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -47,6 +53,23 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+  }
+
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+    val channel = NotificationChannel(
+      notificationChannelId,
+      "UITVibes notifications",
+      NotificationManager.IMPORTANCE_HIGH
+    ).apply {
+      description = "Messages and activity notifications"
+      enableVibration(true)
+      setShowBadge(true)
+    }
+
+    val manager = getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannel(channel)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

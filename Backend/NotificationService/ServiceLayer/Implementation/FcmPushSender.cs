@@ -6,6 +6,7 @@ namespace NotificationService.ServiceLayer.Implementation
 {
     public class FcmPushSender : IFcmPushSender
     {
+        private const string DefaultAndroidChannelId = "uitvibes_default_channel";
         private readonly FirebaseMessaging _messaging;
         private readonly IDeviceTokenService _deviceService;
         private readonly ILogger<FcmPushSender> _logger;
@@ -35,7 +36,11 @@ namespace NotificationService.ServiceLayer.Implementation
                 Android = new AndroidConfig
                 {
                     Priority = Priority.High,
-                    Notification = new AndroidNotification { ChannelId = "default" }
+                    Notification = new AndroidNotification
+                    {
+                        ChannelId = DefaultAndroidChannelId,
+                        Sound = "default"
+                    }
                 },
                 Apns = new ApnsConfig
                 {

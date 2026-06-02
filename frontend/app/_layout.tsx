@@ -16,6 +16,7 @@ import { AppProvider } from '@/context/AppContext';
 import { AppColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { ToastProvider } from '@/components/EnhancedToast';
+import { NotificationForegroundBridge } from '@/components/NotificationForegroundBridge';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -76,6 +77,7 @@ export default function RootLayout() {
       <AppProvider>
         <ToastProvider>
           <AuthGuard />
+          <NotificationForegroundBridge />
           <Stack
           screenOptions={{
             contentStyle: { backgroundColor: AppColors.background },

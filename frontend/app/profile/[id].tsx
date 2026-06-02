@@ -85,7 +85,6 @@ export default function UserProfileScreen() {
       const userHighlights = await getUserHighlights(targetId);
       setHighlights(userHighlights);
     } catch (err) {
-      console.error("[loadUserData] error:", err);
       // Try to at least load the user even if posts/stories fail
       try {
         const userData = await getUserById(id as string);
@@ -120,7 +119,6 @@ export default function UserProfileScreen() {
 
   const handleBlockUser = async () => {
     if (!user) return;
-    console.log('[handleBlockUser] currentUserId:', getCurrentUserId(), 'blockedId:', user.id);
     await blockUser(user.id);
     setBlockStatus({ blockedByMe: true, blockedMe: false });
     setUser(null);
@@ -193,10 +191,21 @@ export default function UserProfileScreen() {
             <TouchableOpacity
               style={styles.moreBtn}
               activeOpacity={0.7}
-              onPress={() => router.push('/settings')}
+              onPress={() => {
+                if (isOwnProfile) {
+                  router.push('/settings');
+                } else {
+                  setActionsSheetVisible(true);
+                }
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Feather name="settings" size={22} color={AppColors.text} strokeWidth={2} />
+              <Feather
+                name={isOwnProfile ? 'settings' : 'more-horizontal'}
+                size={22}
+                color={AppColors.text}
+                strokeWidth={2}
+              />
             </TouchableOpacity>
           }
         />

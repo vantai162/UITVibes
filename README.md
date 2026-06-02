@@ -14,11 +14,8 @@ Một nền tảng mạng xã hội phân tán hiện đại được xây dựn
 - [Yêu Cầu Hệ Thống](#-yêu-cầu-hệ-thống)
 - [Cấu Hình Môi Trường](#-cấu-hình-môi-trường)
 - [Khởi Động Nhanh](#-khởi-động-nhanh)
-- [Lược Đồ Cơ Sở Dữ Liệu](#-lược-đồ-cơ-sở-dữ-liệu)
 - [Tài Liệu API](#-tài-liệu-api)
 - [Docker & Triển Khai](#-docker--triển-khai)
-- [Luồng Sự Kiện & Giao Tiếp](#-luồng-sự-kiện--giao-tiếp)
-- [Kiểm Thử](#-kiểm-thử)
 - [Giám Sát & Ghi Nhật Ký](#-giám-sát--ghi-nhật-ký)
 - [Đóng Góp](#-đóng-góp)
 - [Giấy Phép](#-giấy-phép)
@@ -110,17 +107,17 @@ UITVibes là một nền tảng mạng xã hội có khả năng mở rộng cao
 | Công Nghệ | Mục Đích |
 |-----------|----------|
 | **.NET 8 & ASP.NET Core** | Framework cho tất cả microservices |
-| **.NET Aspire** | Orchestration phát triển địa phương |
+| **.NET Aspire** | Orchestration phát triển |
 | **Entity Framework Core** | ORM cho truy cập dữ liệu |
 | **FluentValidation** | Xác thực đầu vào |
-| **JWT Bearer** | Xác thực không trạng thái |
+| **JWT Bearer** | Xác thực và phân quyền |
 
 ### Dữ Liệu & Hạ Tầng
 | Công Nghệ | Mục Đích |
 |-----------|----------|
 | **PostgreSQL 16** | Cơ sở dữ liệu quan hệ chính (nhiều instance) |
-| **Redis 7** | Cấi nhốm, phiên, xếp hàng |
-| **RabbitMQ 3** | Mô hình tin nhắn, event bus |
+| **Redis 7** | Cache |
+| **RabbitMQ 3** | Message queue |
 | **SignalR** | Giao tiếp real-time WebSocket |
 | **YARP** | API Gateway & reverse proxy |
 | **Cloudinary** | Lưu trữ & tối ưu hóa media |
@@ -132,7 +129,7 @@ UITVibes là một nền tảng mạng xã hội có khả năng mở rộng cao
 
 ## 🏗️ Kiến Trúc Hệ Thống
 
-Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD), nơi mà mỗi service sở hữu cơ sở dữ liệu riêng và giao tiếp qua nhắn tin bất đồng bộ (RabbitMQ) hoặc gọi RPC đồng bộ.
+Dự án tuân theo mẫu microservices, nơi mà mỗi service sở hữu cơ sở dữ liệu riêng và giao tiếp qua nhắn tin bất đồng bộ (RabbitMQ) hoặc gọi RPC đồng bộ.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -185,9 +182,6 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 - **Cơ sở dữ liệu**: PostgreSQL (`authdb`)
 - **Các phụ thuộc chính**: RabbitMQ, Redis, SMTP, JWT
 
-**Giao Tiếp**:
-- 📤 Công bố: `UserRegistered`, `UserBanned` events
-- 📥 Được tiêu thụ bởi: UserService, NotificationService
 
 ---
 
@@ -204,10 +198,6 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 - **Cơ sở dữ liệu**: PostgreSQL (`userdb`)
 - **Các phụ thuộc chính**: Cloudinary, RabbitMQ, gọi RPC đến các service khác
 
-**Giao Tiếp**:
-- 📤 Công bố: `UserFollowed`, `UserUnfollowed` events
-- 📥 Tiêu thụ: `UserRegistered` (tạo hồ sơ)
-- 🔄 RPC: Được PostService, MessageService gọi lấy thông tin người dùng
 
 ---
 
@@ -229,11 +219,6 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 - **Cơ sở dữ liệu**: PostgreSQL (`postdb`)
 - **Các phụ thuộc chính**: Cloudinary, RabbitMQ, RPC đến UserService
 
-**Giao Tiếp**:
-- 📤 Công bố: `PostLiked`, `PostCommented`, `PostMentioned`, `CommentMentioned` events
-- 📥 Tiêu thụ: Dữ liệu UserService qua RPC
-- 🔄 RPC: Gọi UserService để lấy hồ sơ tác giả & trạng thái theo dõi
-
 ---
 
 ### 4. **MessageService**
@@ -250,10 +235,6 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 - **Cơ sở dữ liệu**: PostgreSQL (`messagedb`)
 - **Các phụ thuộc chính**: SignalR, RabbitMQ, Redis (để mở rộng)
 
-**Giao Tiếp**:
-- 📤 Công bố: `MessageSent` events
-- 📥 Được tiêu thụ bởi: NotificationService
-- 🔄 RPC: Lấy thông tin người dùng từ UserService
 
 ---
 
@@ -273,71 +254,19 @@ Dự án tuân theo mẫu microservices với Thiết kế hướng Miền (DDD)
 - **Cơ sở dữ liệu**: PostgreSQL (`notificationdb`)
 - **Các phụ thuộc chính**: Firebase Admin SDK, RabbitMQ event consumers
 
-**Giao Tiếp**:
-- 📥 Tiêu thụ: Sự kiện từ AuthService, UserService, PostService, MessageService
-- Công bố: Thông báo đẩy đến các thiết bị khách hàng
-
 ---
 
 ### 6. **ApiService (API Gateway)**
 **Mục Đích**: Điều phối request trung tâm, tổng hợp và xác thực
 - YARP reverse proxy điều phối đến tất cả microservices
 - Xác thực JWT tập trung & phân quyền
-- Giới hạn tốc độ
-- Khám phá service
 - Tổng hợp tài liệu Swagger/OpenAPI
 - Xử lý token chuỗi truy vấn SignalR
 - Ghi nhật ký request/response
 - Xử lý lỗi & chuẩn hóa mã trạng thái
 
-**Bản Đồ Điều Phối**:
-```
-/auth/* → AuthService
-/users/* → UserService
-/posts/* → PostService
-/messages/* → MessageService + SignalR hub
-/notifications/* → NotificationService
-```
 
 > **Lưu ý**: Các cổng của services được gán tự động bởi .NET Aspire. Xem console output khi chạy `dotnet run` để biết cổng cụ thể.
-
----
-
-## 💾 Lược Đồ Cơ Sở Dữ Liệu
-
-### **AuthDB** (PostgreSQL)
-- `Users`: Thông tin đăng nhập, vai trò, trạng thái xác thực, trạng thái cấm
-- `RefreshTokens`: Theo dõi làm mới token
-
-### **UserDB** (PostgreSQL)
-- `UserProfiles`: Thông tin hiển thị, avatars, tiểu sử, số lượng
-- `Follows`: Cặp người theo dõi-theo dõi
-- `Blocks`: Cặp người dùng bị chặn
-- `SocialLinks`: Liên kết hồ sơ bên ngoài
-- `UserReports`: Báo cáo lạm dụng
-
-### **PostDB** (PostgreSQL)
-- `Posts`: Nội dung, media, hiển thị, số liệu engagement
-- `Comments`: Cấu trúc bình luận lồng nhau
-- `Likes`: Thích bài đăng & bình luận
-- `Stories`: Nội dung tạm thời
-- `StoryHighlights`: Bộ sưu tập stories được lưu
-- `Reels`: Nội dung video ngắn
-- `PostMedia`: Siêu dữ liệu ảnh/video với URL Cloudinary
-- `Hashtags`: Theo dõi tag & xu hướng
-- `Mentions`: Theo dõi nhắc đến người dùng
-- `Bookmarks`: Bài đăng được lưu
-- `PostReports`: Cột kỷ kiểm duyệt nội dung
-
-### **MessageDB** (PostgreSQL)
-- `Conversations`: Trò chuyện riêng/nhóm
-- `Messages`: Nội dung tin nhắn, trạng thái đọc, dấu thời gian
-- `ConversationMembers`: Tham gia người dùng
-
-### **NotificationDB** (PostgreSQL)
-- `Notifications`: Thông báo sự kiện
-- `UserNotificationSettings`: Tùy chỉnh theo loại sự kiện
-- `DeviceTokens`: Đăng ký thiết bị FCM
 
 ---
 
@@ -837,68 +766,6 @@ services:
 
 ---
 
-## 🔄 Luồng Sự Kiện & Giao Tiếp
-
-### Mẫu Công Bố Sự Kiện
-Các dịch vụ công bố domain events tới RabbitMQ mà các dịch vụ khác tiêu thụ:
-
-```
-AuthService công bố:
-  ├─ UserRegistered → (UserService, NotificationService tiêu thụ)
-  └─ UserBanned
-
-UserService công bố:
-  ├─ UserFollowed → (NotificationService)
-  └─ UserUnfollowed
-
-PostService công bố:
-  ├─ PostLiked → (NotificationService)
-  ├─ PostCommented → (NotificationService)
-  ├─ PostMentioned → (NotificationService)
-  └─ CommentMentioned → (NotificationService)
-
-MessageService công bố:
-  └─ MessageSent → (NotificationService)
-
-NotificationService tiêu thụ:
-  └─ Tất cả sự kiện ở trên và gửi thông báo đẩy FCM
-```
-
-### Các Cuộc Gọi RPC (Đồng Bộ)
-Một số dịch vụ gọi các dịch vụ khác một cách đồng bộ cho các hoạt động cụ thể:
-
-```
-PostService → UserService
-  (Lấy hồ sơ tác giả, trạng thái theo dõi)
-
-MessageService → UserService
-  (Xác thực thành viên trò chuyện)
-```
-
----
-
-## 🧪 Kiểm Thử
-
-### Backend Unit Tests
-```bash
-cd Backend
-dotnet test
-```
-
-### Backend Integration Tests
-```bash
-# Đảm bảo Docker Compose đang chạy
-dotnet test --configuration Integration
-```
-
-### Frontend E2E Tests
-```bash
-cd frontend
-npm run test
-```
-
----
-
 ## 📊 Giám Sát & Ghi Nhật Ký
 
 ### Health Checks
@@ -941,7 +808,6 @@ Dự án này được cấp phép theo Giấy Phép MIT - xem tệp [LICENSE](L
 ## 📞 Hỗ Trợ & Liên Hệ
 
 Để có câu hỏi, sự cố hoặc đề xuất:
-- 📧 Email: support@uitvibes.com
 - 🐛 Issues: [GitHub Issues](https://github.com/curyhao123/UITVibes-Microservices/issues)
 - 💬 Discord: [Community Server](https://discord.gg/your-server) *(Link sẽ được cập nhật khi có server)*
 

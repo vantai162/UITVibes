@@ -23,6 +23,7 @@ type ForegroundNotification = {
   body: string;
   type: BackendNotificationType;
   entityId: string;
+  notificationId: string;
 };
 
 function getStringValue(value: unknown): string {
@@ -35,6 +36,7 @@ function parseForegroundNotification(
   const data = message.data ?? {};
   const type = getStringValue(data.type);
   const entityId = getStringValue(data.entityId);
+  const notificationId = getStringValue(data.notificationId);
   const body =
     message.notification?.body ||
     getStringValue(data.body) ||
@@ -48,6 +50,7 @@ function parseForegroundNotification(
     body,
     type,
     entityId,
+    notificationId,
   };
 }
 
@@ -58,6 +61,7 @@ export function NotificationForegroundBridge() {
     isAuthenticated,
     refreshNotifications,
     handleForegroundNotificationReceived,
+    markNotificationRead,
   } = useApp();
   const [banner, setBanner] = useState<ForegroundNotification | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,6 +105,9 @@ export function NotificationForegroundBridge() {
 
   const openNotification = () => {
     setBanner(null);
+    if (banner.notificationId) {
+      void markNotificationRead(banner.notificationId);
+    }
     if (route) {
       router.push(route as any);
     }

@@ -5,17 +5,15 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
-import { Notification } from '../data/mockData';
+import type { Notification } from '../services/notificationService';
 import { AppColors } from '../constants/theme';
 import { formatDistanceToNow } from '../utils/time';
 import { CompactHeader } from '../components/StaticPremiumHeader';
-import defaultAvatar from '../assets/images/default-avatar.png';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -27,27 +25,27 @@ export default function NotificationsScreen() {
 
   const getNotificationIcon = (type: string): { name: string; color: string } => {
     switch (type) {
-      case 'follow':
+      case 'NewFollower':
         return { name: 'user-plus', color: AppColors.primary };
-      case 'like':
+      case 'PostLiked':
         return { name: 'heart', color: '#e74c3c' };
-      case 'comment':
+      case 'PostCommented':
         return { name: 'message-circle', color: '#3498db' };
-      case 'mention':
+      case 'Mentioned':
+      case 'Tagged':
         return { name: 'at-sign', color: '#9b59b6' };
-      case 'share':
-        return { name: 'share', color: '#2ecc71' };
+      case 'NewMessage':
+        return { name: 'message-square', color: AppColors.primary };
+      case 'MessageRead':
+        return { name: 'check-circle', color: '#2ecc71' };
       default:
         return { name: 'bell', color: AppColors.textMuted };
     }
   };
 
   const handleNotificationPress = async (notif: Notification) => {
-    await markNotificationRead(notif.id);
-    if (notif.post) {
-      router.push(`/post/${notif.post.id}` as any);
-    } else if (notif.type === 'follow') {
-      router.push(`/profile/${notif.user.id}` as any);
+    if (!notif.isRead) {
+      await markNotificationRead(notif.id);
     }
   };
 
@@ -59,30 +57,18 @@ export default function NotificationsScreen() {
         style={[styles.notifItem, !item.isRead && styles.notifItemUnread]}
         onPress={() => handleNotificationPress(item)}
       >
-        {/* Avatar */}
-        <View style={styles.avatarWrap}>
-          <Image source={item.user.avatar ? { uri: item.user.avatar } : defaultAvatar} style={styles.avatar} />
-          <View style={[styles.iconBadge, { backgroundColor: icon.color }]}>
-            <Feather name={icon.name as any} size={10} color="white" />
-          </View>
+        <View style={[styles.iconWrap, { backgroundColor: `${icon.color}18` }]}>
+          <Feather name={icon.name as any} size={20} color={icon.color} />
         </View>
 
-        {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.notifText}>
-            <Text style={styles.username}>{item.user.displayName}</Text>
-            {' '}
-            {item.message}
+          <Text style={styles.notifText} numberOfLines={3}>
+            {item.content || item.message}
           </Text>
           <Text style={styles.time}>
             {formatDistanceToNow(new Date(item.createdAt))}
           </Text>
         </View>
-
-        {/* Post thumbnail */}
-        {item.post && (
-          <Image source={{ uri: item.post.image }} style={styles.thumbnail} />
-        )}
 
         {!item.isRead && <View style={styles.unreadDot} />}
       </TouchableOpacity>
@@ -119,7 +105,7 @@ export default function NotificationsScreen() {
             <Feather name="bell" size={48} color={AppColors.textMuted} />
             <Text style={styles.emptyTitle}>No notifications yet</Text>
             <Text style={styles.emptySubtitle}>
-              When someone interacts with your posts, you'll see it here.
+              When someone interacts with you, you'll see it here.
             </Text>
           </View>
         }
@@ -153,23 +139,10 @@ const styles = StyleSheet.create({
   notifItemUnread: {
     backgroundColor: `${AppColors.primary}06`,
   },
-  avatarWrap: {
-    position: 'relative',
-  },
-  avatar: {
+  iconWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-  },
-  iconBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: AppColors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -183,18 +156,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: AppColors.text,
   },
-  username: {
-    fontWeight: '700',
-  },
   time: {
     fontSize: 12,
     color: AppColors.textMuted,
     marginTop: 2,
-  },
-  thumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
   },
   unreadDot: {
     width: 8,

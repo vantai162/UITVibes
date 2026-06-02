@@ -1,4 +1,4 @@
-package com.anonymous.UITVibes
+package com.uitvibes.app
 
 import android.app.Application
 import android.content.res.Configuration

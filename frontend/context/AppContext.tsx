@@ -12,10 +12,10 @@ import {
   Post,
   Conversation,
   Message,
-  Notification,
 } from '../data/mockData';
 import * as api from '../services/api';
 import type { Story } from '../services/storyService';
+import type { Notification } from '../services/notificationService';
 import { useOnlineUsers } from '../hooks/useOnlineUsers';
 import { getConnection } from '../services/signalrService';
 import type { BE_MessageResponse } from '../services/backendTypes';
@@ -141,7 +141,13 @@ interface AppContextType {
   // Notifications
   notifications: Notification[];
   unreadCount: number;
+  pushNotificationsEnabled: boolean;
+  isUpdatingPushNotifications: boolean;
+  pushNotificationPermission: "unknown" | "granted" | "denied";
   refreshNotifications: () => Promise<void>;
+  refreshNotificationSettings: () => Promise<void>;
+  setPushNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
+  registerPushDevice: () => Promise<boolean>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
 
@@ -223,6 +229,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const user = await api.login(email, password);
         setCurrentUser(user);
         setIsAuthenticated(true);
+        void api.registerDeviceForPushNotifications();
         // isNewUser = posts === 0 (tài khoản mới tạo chưa có bài viết)
         setIsNewUser(user.posts === 0);
         return user;
@@ -283,6 +290,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setPendingAuthUser(null);
     setCurrentUser(user);
     setIsAuthenticated(true);
+    void api.registerDeviceForPushNotifications();
     setIsNewUser(true); // posts = 0 for new account
   }, []);
 
@@ -297,6 +305,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setStories([]);
     setConversations([]);
     setNotifications([]);
+    setUnreadCount(0);
+    setPushNotificationsEnabledState(false);
+    setPushNotificationPermission("unknown");
   }, []);
 
   const logout = useCallback(async () => {
@@ -395,6 +406,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ─── Notifications ───────────────────────────────────────
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pushNotificationsEnabled, setPushNotificationsEnabledState] = useState(false);
+  const [isUpdatingPushNotifications, setIsUpdatingPushNotifications] = useState(false);
+  const [pushNotificationPermission, setPushNotificationPermission] =
+    useState<"unknown" | "granted" | "denied">("unknown");
 
   // ─── Typing ──────────────────────────────────────────────
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -1108,6 +1123,52 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, []);
 
+  const refreshNotificationSettings = useCallback(async () => {
+    try {
+      const settings = await api.getNotificationSettings();
+      setPushNotificationsEnabledState(settings.isEnabled);
+    } catch (error) {
+      console.warn("Failed to load notification settings:", error);
+    }
+  }, []);
+
+  const registerPushDevice = useCallback(async () => {
+    const registered = await api.registerDeviceForPushNotifications();
+    setPushNotificationPermission(registered ? "granted" : "denied");
+    return registered;
+  }, []);
+
+  const setPushNotificationsEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previousValue = pushNotificationsEnabled;
+      setPushNotificationsEnabledState(enabled);
+      setIsUpdatingPushNotifications(true);
+
+      try {
+        await api.updateNotificationSettings(enabled);
+
+        if (enabled) {
+          const registered = await registerPushDevice();
+          if (!registered) {
+            setPushNotificationsEnabledState(false);
+            await api.updateNotificationSettings(false);
+            return false;
+          }
+        } else {
+          setPushNotificationPermission("unknown");
+        }
+        return true;
+      } catch (error) {
+        setPushNotificationsEnabledState(previousValue);
+        console.error("Failed to update notification settings:", error);
+        return false;
+      } finally {
+        setIsUpdatingPushNotifications(false);
+      }
+    },
+    [pushNotificationsEnabled, registerPushDevice],
+  );
+
   // ─── Init: thử restore session từ JWT đã lưu ─────────────
   useEffect(() => {
     const initializeData = async () => {
@@ -1130,8 +1191,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             refreshReels(),
             refreshConversations(),
             refreshNotifications(),
+            refreshNotificationSettings(),
             fetchSuggestedUsers(),
           ]);
+          void api.registerDeviceForPushNotifications();
         } else {
           // Không có token hoặc token hết hạn → chưa đăng nhập
           // Vẫn load dữ liệu mẫu để preview app (nếu cần)
@@ -1165,8 +1228,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     refreshReels,
     refreshConversations,
     refreshNotifications,
+    refreshNotificationSettings,
     fetchSuggestedUsers,
   ]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const unsubscribeForeground = api.subscribeToForegroundNotifications(() => {
+      void refreshNotifications();
+    });
+    const unsubscribeTokenRefresh = api.subscribeToPushTokenRefresh();
+
+    return () => {
+      unsubscribeForeground();
+      unsubscribeTokenRefresh();
+    };
+  }, [isAuthenticated, refreshNotifications]);
 
   // ─── Sync conversationMembers to ref (without triggering listener re-run) ───
   useEffect(() => {
@@ -1497,7 +1575,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         partnerTyping,
         notifications,
         unreadCount,
+        pushNotificationsEnabled,
+        isUpdatingPushNotifications,
+        pushNotificationPermission,
         refreshNotifications,
+        refreshNotificationSettings,
+        setPushNotificationsEnabled,
+        registerPushDevice,
         markNotificationRead,
         markAllNotificationsRead,
         isUserOnline: isOnline,

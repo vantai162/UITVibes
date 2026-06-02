@@ -6,6 +6,7 @@ buildscript {
     mavenCentral()
   }
   dependencies {
+    classpath 'com.google.gms:google-services:4.4.1'
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
@@ -13,6 +14,16 @@ buildscript {
 }
 
 allprojects {
+  if (project.hasProperty('reactNativeArchitectures')) {
+    def requestedArchitectures = project.property('reactNativeArchitectures')
+      .toString()
+      .split(',')
+    def x86OnlyArchitectures = requestedArchitectures.findAll { it == 'x86_64' }
+    project.ext.reactNativeArchitectures = x86OnlyArchitectures
+      ? x86OnlyArchitectures.join(',')
+      : requestedArchitectures.join(',')
+  }
+
   repositories {
     google()
     mavenCentral()

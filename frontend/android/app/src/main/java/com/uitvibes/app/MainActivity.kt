@@ -1,4 +1,4 @@
-package com.anonymous.UITVibes
+package com.uitvibes.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

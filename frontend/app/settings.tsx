@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,8 @@ import { useApp } from '../context/AppContext';
 import { ConfirmationModal, EditProfileModal } from '../components';
 import { SettingsSection, SettingsRow } from '../components/settings';
 import { CompactHeader } from '../components/StaticPremiumHeader';
-import defaultAvatar from '../assets/images/default-avatar.png';
+
+const defaultAvatar = require('../assets/images/default-avatar.png');
 
 // ─── Profile Summary Card ────────────────────────────────────────────────────
 
@@ -151,7 +152,14 @@ const profileStyles = StyleSheet.create({
 
 export default function SettingsScreen() {
   const settingsRouter = useRouter();
-  const { logout, currentUser } = useApp();
+  const {
+    logout,
+    pushNotificationsEnabled,
+    isUpdatingPushNotifications,
+    pushNotificationPermission,
+    refreshNotificationSettings,
+    setPushNotificationsEnabled,
+  } = useApp();
 
   // Toggle states
   const [privateAccount, setPrivateAccount] = useState(false);
@@ -166,6 +174,10 @@ export default function SettingsScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  useEffect(() => {
+    void refreshNotificationSettings();
+  }, [refreshNotificationSettings]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────
   const safePush = useCallback(
@@ -216,6 +228,16 @@ export default function SettingsScreen() {
       );
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const handlePushNotificationsToggle = async (enabled: boolean) => {
+    const success = await setPushNotificationsEnabled(enabled);
+    if (enabled && !success) {
+      Alert.alert(
+        'Notifications disabled',
+        'Please allow notifications in your device settings to receive push alerts.',
+      );
     }
   };
 
@@ -289,7 +311,16 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="bell"
             label="Push Notifications"
-            onPress={() => {}}
+            subtitle={
+              isUpdatingPushNotifications
+                ? 'Updating...'
+                : pushNotificationPermission === 'denied'
+                  ? 'Permission is disabled on this device'
+                  : 'Receive alerts for messages and activity'
+            }
+            isToggle
+            toggleValue={pushNotificationsEnabled}
+            onToggle={handlePushNotificationsToggle}
             isLast
           />
         </SettingsSection>

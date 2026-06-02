@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useApp } from '../../context/AppContext';
 import { AppColors, borderRadius, layoutPadding } from '../../constants/theme';
@@ -30,10 +31,15 @@ import { Typography } from '../../constants/typography';
 import { Avatar } from '../../components/Avatar';
 import { Toast } from '../../components/Toast';
 import { MentionInput } from '../../components/MentionInput';
+import {
+  ContentVisibility,
+  contentVisibilityToApiValue,
+  getDefaultContentVisibility,
+} from '../../services/contentPreferences';
 
 type CreateType = 'post' | 'reels';
 
-export type PostVisibility = 'Public' | 'Followers' | 'Private';
+export type PostVisibility = ContentVisibility;
 
 const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: React.ComponentProps<typeof Feather>['name']; description: string }[] = [
   { value: 'Public', label: 'Public', icon: 'globe', description: 'Anyone can see your post' },
@@ -118,6 +124,27 @@ export default function CreateScreen() {
     return { backgroundColor };
   });
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      const preferenceType = createType === 'reels' ? 'reels' : 'post';
+
+      void getDefaultContentVisibility(preferenceType)
+        .then((visibility) => {
+          if (active) {
+            setSelectedVisibility(visibility);
+          }
+        })
+        .catch((error) => {
+          console.warn('Failed to load default content visibility:', error);
+        });
+
+      return () => {
+        active = false;
+      };
+    }, [createType]),
+  );
+
   const pickImage = async () => {
     if (Platform.OS !== 'web') {
       await Haptics.selectionAsync();
@@ -200,7 +227,7 @@ export default function CreateScreen() {
         setToastType('success');
         setToastMessage('Your reel has been published!');
       } else {
-        const visibilityValue = selectedVisibility === 'Public' ? 0 : selectedVisibility === 'Followers' ? 1 : 2;
+        const visibilityValue = contentVisibilityToApiValue(selectedVisibility);
         await createPost(selectedMedia, caption, undefined, visibilityValue);
         setToastType('success');
         setToastMessage('Your post has been published!');
@@ -497,7 +524,7 @@ export default function CreateScreen() {
           <Pressable style={styles.visibilityBackdrop} onPress={() => setShowVisibilityPicker(false)} />
           <View style={styles.visibilityCard}>
             <View style={styles.visibilityHeader}>
-              <Text style={styles.visibilityTitle}>Who can see your post?</Text>
+              <Text style={styles.visibilityTitle}>Who can see your {createType === 'reels' ? 'reel' : 'post'}?</Text>
               <TouchableOpacity onPress={() => setShowVisibilityPicker(false)} style={styles.visibilityCloseBtn}>
                 <Feather name="x" size={20} color={AppColors.text} strokeWidth={2} />
               </TouchableOpacity>

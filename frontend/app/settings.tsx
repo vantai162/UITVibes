@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -151,12 +151,7 @@ const profileStyles = StyleSheet.create({
 
 export default function SettingsScreen() {
   const settingsRouter = useRouter();
-  const { logout, currentUser } = useApp();
-
-  // Toggle states
-  const [privateAccount, setPrivateAccount] = useState(false);
-  const [mutedAccounts, setMutedAccounts] = useState(false);
-  const [activityStatus, setActivityStatus] = useState(true);
+  const { logout, deleteAccount } = useApp();
 
   // Modal states
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
@@ -166,14 +161,6 @@ export default function SettingsScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-
-  // ── Navigation helpers ────────────────────────────────────────────────────
-  const safePush = useCallback(
-    (path: string) => {
-      settingsRouter.push(path as any);
-    },
-    [settingsRouter],
-  );
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const performLogout = async () => {
@@ -205,7 +192,7 @@ export default function SettingsScreen() {
     }
     setDeleteBusy(true);
     try {
-      await logout();
+      await deleteAccount(pwd);
       setDeleteModalVisible(false);
       setDeletePassword('');
       settingsRouter.replace('/auth/login' as any);
@@ -262,9 +249,8 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="key"
             label="Private Account"
-            isToggle
-            toggleValue={privateAccount}
-            onToggle={setPrivateAccount}
+            value="Coming soon"
+            showChevron={false}
             isLast
           />
         </SettingsSection>
@@ -274,22 +260,21 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="bell-off"
             label="Muted Accounts"
-            isToggle
-            toggleValue={mutedAccounts}
-            onToggle={setMutedAccounts}
+            value="Coming soon"
+            showChevron={false}
             isFirst
           />
           <SettingsRow
             icon="eye"
             label="Activity Status"
-            isToggle
-            toggleValue={activityStatus}
-            onToggle={setActivityStatus}
+            value="Coming soon"
+            showChevron={false}
           />
           <SettingsRow
             icon="bell"
             label="Push Notifications"
-            onPress={() => {}}
+            value="Coming soon"
+            showChevron={false}
             isLast
           />
         </SettingsSection>
@@ -299,27 +284,27 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="grid"
             label="Posts"
-            value="Public"
-            onPress={() => {}}
+            value="Coming soon"
+            showChevron={false}
             isFirst
           />
           <SettingsRow
             icon="video"
             label="Reels"
-            value="Public"
-            onPress={() => {}}
+            value="Coming soon"
+            showChevron={false}
           />
           <SettingsRow
             icon="music"
             label="Music"
-            value="Public"
-            onPress={() => {}}
+            value="Coming soon"
+            showChevron={false}
           />
           <SettingsRow
             icon="globe"
             label="Language"
             value="English"
-            onPress={() => {}}
+            showChevron={false}
             isLast
           />
         </SettingsSection>

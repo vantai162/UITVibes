@@ -33,6 +33,7 @@ interface AppContextType {
   register: (email: string, password: string, username: string) => Promise<boolean>;
   confirmPendingAuth: (user: User) => void;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   isAuthenticated: boolean;
 
   // Onboarding

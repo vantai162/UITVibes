@@ -218,6 +218,7 @@ export default function ChatScreen() {
     if (messages.length > 0 && !initialScrollDoneRef.current) {
       scrollToBottom(false);
       initialScrollDoneRef.current = true;
+      lastMessageIdRef.current = messages[messages.length - 1]?.id ?? null;
       markAtBottom();
     }
   }, [messages.length, markAtBottom, scrollToBottom, id]);
@@ -228,13 +229,15 @@ export default function ChatScreen() {
 
     const isNewLastMessage = lastMessage.id !== lastMessageIdRef.current;
     lastMessageIdRef.current = lastMessage.id;
+    const isOwnMessage = lastMessage.senderId === currentUser?.id;
+    const shouldScrollForVisibleBottom = !userScrolledUpRef.current;
+    const shouldScrollForOwnSend =
+      pendingOwnMessageScrollRef.current && isOwnMessage;
 
-    if (
-      isNewLastMessage &&
-      pendingOwnMessageScrollRef.current &&
-      lastMessage.senderId === currentUser?.id
-    ) {
-      pendingOwnMessageScrollRef.current = false;
+    if (isNewLastMessage && (shouldScrollForVisibleBottom || shouldScrollForOwnSend)) {
+      if (shouldScrollForOwnSend) {
+        pendingOwnMessageScrollRef.current = false;
+      }
       scheduleScrollToBottom(true);
     }
   }, [currentUser?.id, messages, scheduleScrollToBottom]);

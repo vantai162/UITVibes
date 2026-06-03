@@ -322,6 +322,10 @@ export default function ReelsScreen() {
     toggleReelLike(reel.id, reel.isLiked);
   }, [toggleReelLike]);
 
+  const handleTogglePaused = useCallback((paused: boolean) => {
+    setIsPaused(paused);
+  }, []);
+
   // ── Comment handlers ─────────────────────────────────────────────────────────
   const handleOpenComments = useCallback(async (reel: ReelDisplayData) => {
     setSelectedReel(reel);
@@ -506,10 +510,11 @@ export default function ReelsScreen() {
         onShare={() => handleOpenShare(item)}
         onUserPress={() => handleUserPress(item.userId)}
         onFollow={() => handleFollow(item.userId)}
+        onTogglePaused={handleTogglePaused}
         isCurrentUser={item.userId === currentUser?.id}
       />
     ),
-    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow],
+    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow, handleTogglePaused],
   );
 
   // ── Render separator ─────────────────────────────────────────────────────────

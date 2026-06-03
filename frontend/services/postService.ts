@@ -849,6 +849,18 @@ async function transformReelComment(
   };
 }
 
+async function fetchRepliesForReelComment(commentId: string): Promise<CommentType[]> {
+  const { data } = await apiClient.get<BE_ReelCommentResponse[]>(
+    `/post/reel/comment/${commentId}/replies`,
+  );
+
+  if (!data || !Array.isArray(data)) {
+    return [];
+  }
+
+  return Promise.all(data.map((reply) => transformReelComment(reply)));
+}
+
 export async function getReelComments(reelId: string): Promise<CommentType[]> {
   try {
     const { data } = await apiClient.get<BE_ReelCommentResponse[]>(
@@ -857,7 +869,13 @@ export async function getReelComments(reelId: string): Promise<CommentType[]> {
     if (!data || !Array.isArray(data)) return [];
 
     const comments = await Promise.all(
-      data.map(async (c) => transformReelComment(c)),
+      data.map(async (c) => {
+        const comment = await transformReelComment(c);
+        if (c.replyCount && c.replyCount > 0) {
+          comment.replies = await fetchRepliesForReelComment(c.id);
+        }
+        return comment;
+      }),
     );
     return comments;
   } catch (error) {

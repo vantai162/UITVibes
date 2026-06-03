@@ -88,6 +88,72 @@ function transformReelForDisplay(reel: APIReel, userMap: Map<string, User>): Ree
   };
 }
 
+function addCommentToList(
+  comments: CommentType[],
+  comment: CommentType,
+  parentCommentId?: string,
+): CommentType[] {
+  if (!parentCommentId) {
+    return [comment, ...comments];
+  }
+
+  let inserted = false;
+  const nextComments = comments.map((item) => {
+    if (item.id !== parentCommentId) {
+      return item;
+    }
+
+    inserted = true;
+    return {
+      ...item,
+      replies: [comment, ...(item.replies ?? [])],
+    };
+  });
+
+  return inserted ? nextComments : [comment, ...comments];
+}
+
+function replaceCommentInList(
+  comments: CommentType[],
+  commentId: string,
+  replacement: CommentType,
+): CommentType[] {
+  return comments.map((item) => {
+    if (item.id === commentId) {
+      return replacement;
+    }
+
+    if (!item.replies?.length) {
+      return item;
+    }
+
+    return {
+      ...item,
+      replies: item.replies.map((reply) =>
+        reply.id === commentId ? replacement : reply,
+      ),
+    };
+  });
+}
+
+function removeCommentFromList(
+  comments: CommentType[],
+  commentId: string,
+): CommentType[] {
+  return comments
+    .filter((item) => item.id !== commentId)
+    .map((item) => {
+      if (!item.replies?.length) {
+        return item;
+      }
+
+      return {
+        ...item,
+        replies: item.replies.filter((reply) => reply.id !== commentId),
+      };
+    });
+}
+
 // ─── Shuffle array (Fisher-Yates) ─────────────────────────────────────────────
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -278,68 +344,72 @@ export default function ReelsScreen() {
     setReelComments([]);
   }, []);
 
-const handlePostComment = useCallback(async (text: string) => {
-  if (selectedReel) {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const handlePostComment = useCallback(async (text: string, parentCommentId?: string) => {
+    if (selectedReel) {
+      const reelId = selectedReel.id;
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Optimistic: create temp comment immediately
-    const optimisticComment: CommentType = {
-      id: tempId,
-      userId: currentUser?.id || '',
-      user: currentUser || {
-        id: '',
-        username: 'You',
-        displayName: 'You',
-        fullName: 'You',
-        avatar: '',
-        coverImage: '',
-        bio: '',
-        gender: '',
-        followers: 0,
-        following: 0,
-        posts: 0,
-        isVerified: false,
-        isFollowing: false,
-      },
-      text,
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      isLiked: false,
-      replies: [],
-    };
+      // Optimistic: create temp comment immediately
+      const optimisticComment: CommentType = {
+        id: tempId,
+        userId: currentUser?.id || '',
+        user: currentUser || {
+          id: '',
+          username: 'You',
+          displayName: 'You',
+          fullName: 'You',
+          avatar: '',
+          coverImage: '',
+          bio: '',
+          gender: '',
+          followers: 0,
+          following: 0,
+          posts: 0,
+          isVerified: false,
+          isFollowing: false,
+        },
+        text,
+        createdAt: new Date().toISOString(),
+        likes: 0,
+        isLiked: false,
+        replies: [],
+        parentId: parentCommentId,
+      };
 
-    setReelComments((prev) => [optimisticComment, ...prev]);
+      setReelComments((prev) =>
+        addCommentToList(prev, optimisticComment, parentCommentId),
+      );
 
-    try {
-      const result = await createReelComment(selectedReel.id, text);
-      if (result && result.success && result.comment) {
-        // Replace temp comment with real one
-        setReelComments((prev) =>
-          prev.map((c) => (c.id === tempId ? result.comment! : c))
-        );
-        setDisplayReels((prev) =>
-          prev.map((reel) =>
-            reel.id === selectedReel.id
-              ? { ...reel, comments: reel.comments + 1 }
-              : reel
-          )
-        );
-        setSelectedReel((prev) =>
-          prev && prev.id === selectedReel.id
-            ? { ...prev, comments: prev.comments + 1 }
-            : prev
-        );
-      } else {
-        // Remove temp comment if failed
-        setReelComments((prev) => prev.filter((c) => c.id !== tempId));
+      try {
+        const result = await createReelComment(reelId, text, parentCommentId);
+        if (result && result.success && result.comment) {
+          // Replace temp comment with real one
+          setReelComments((prev) =>
+            replaceCommentInList(prev, tempId, result.comment!)
+          );
+          setDisplayReels((prev) =>
+            prev.map((reel) =>
+              reel.id === reelId
+                ? { ...reel, comments: reel.comments + 1 }
+                : reel
+            )
+          );
+          setSelectedReel((prev) =>
+            prev && prev.id === reelId
+              ? { ...prev, comments: prev.comments + 1 }
+              : prev
+          );
+        } else {
+          // Remove temp comment if failed
+          setReelComments((prev) => removeCommentFromList(prev, tempId));
+        }
+      } catch (error) {
+        console.error('[Reels] Failed to post comment:', error);
+        // Rollback: remove temp comment
+        setReelComments((prev) => removeCommentFromList(prev, tempId));
       }
-    } catch (error) {
-      console.error('[Reels] Failed to post comment:', error);
-      // Rollback: remove temp comment
-      setReelComments((prev) => prev.filter((c) => c.id !== tempId));
     }
-  }
-}, [selectedReel, currentUser]);
+  }, [selectedReel, currentUser]);
 
   const handleLikeComment = useCallback(async (commentId: string) => {
     const comment = reelComments.find((c) => c.id === commentId);

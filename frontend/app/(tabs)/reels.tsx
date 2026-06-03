@@ -20,7 +20,6 @@ import {
   FlatList,
   Dimensions,
   StatusBar,
-  Alert,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -32,8 +31,6 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from 'react-native-reanimated';
-import { Header } from '../../components';
-import { StaticPremiumHeader } from '../../components/StaticPremiumHeader';
 import { ReelCard, ReelDisplayData } from '../../components/ReelCard';
 import { CommentSheet } from '../../components/CommentSheet';
 import { ShareSheet } from '../../components/ShareSheet';
@@ -43,7 +40,12 @@ import type { Comment as CommentType } from '../../data/mockData';
 import { fetchUserById } from '../../services/userService';
 import { User } from '../../data/mockData';
 import type { Reel as APIReel } from '../../services/postService';
-import { getReelComments, addReelComment, deleteReelComment, toggleReelCommentLike } from '../../services/postService';
+import {
+  getReelComments,
+  addReelComment as createReelComment,
+  deleteReelComment as removeReelComment,
+  toggleReelCommentLike as setReelCommentLike,
+} from '../../services/postService';
 import { TAB_BAR_BOTTOM_OFFSET } from '../../components/ModernTabBar';
 import { reelsUserCache, clearReelsUserCache } from '../../context/reelsUserCache';
 
@@ -86,6 +88,72 @@ function transformReelForDisplay(reel: APIReel, userMap: Map<string, User>): Ree
   };
 }
 
+function addCommentToList(
+  comments: CommentType[],
+  comment: CommentType,
+  parentCommentId?: string,
+): CommentType[] {
+  if (!parentCommentId) {
+    return [comment, ...comments];
+  }
+
+  let inserted = false;
+  const nextComments = comments.map((item) => {
+    if (item.id !== parentCommentId) {
+      return item;
+    }
+
+    inserted = true;
+    return {
+      ...item,
+      replies: [comment, ...(item.replies ?? [])],
+    };
+  });
+
+  return inserted ? nextComments : [comment, ...comments];
+}
+
+function replaceCommentInList(
+  comments: CommentType[],
+  commentId: string,
+  replacement: CommentType,
+): CommentType[] {
+  return comments.map((item) => {
+    if (item.id === commentId) {
+      return replacement;
+    }
+
+    if (!item.replies?.length) {
+      return item;
+    }
+
+    return {
+      ...item,
+      replies: item.replies.map((reply) =>
+        reply.id === commentId ? replacement : reply,
+      ),
+    };
+  });
+}
+
+function removeCommentFromList(
+  comments: CommentType[],
+  commentId: string,
+): CommentType[] {
+  return comments
+    .filter((item) => item.id !== commentId)
+    .map((item) => {
+      if (!item.replies?.length) {
+        return item;
+      }
+
+      return {
+        ...item,
+        replies: item.replies.filter((reply) => reply.id !== commentId),
+      };
+    });
+}
+
 // ─── Shuffle array (Fisher-Yates) ─────────────────────────────────────────────
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -109,9 +177,6 @@ export default function ReelsScreen() {
     reels,
     refreshReels,
     toggleReelLike,
-    addReelComment,
-    deleteReelComment,
-    toggleReelCommentLike,
     toggleFollow,
   } = useApp();
 
@@ -257,6 +322,10 @@ export default function ReelsScreen() {
     toggleReelLike(reel.id, reel.isLiked);
   }, [toggleReelLike]);
 
+  const handleTogglePaused = useCallback((paused: boolean) => {
+    setIsPaused(paused);
+  }, []);
+
   // ── Comment handlers ─────────────────────────────────────────────────────────
   const handleOpenComments = useCallback(async (reel: ReelDisplayData) => {
     setSelectedReel(reel);
@@ -279,64 +348,80 @@ export default function ReelsScreen() {
     setReelComments([]);
   }, []);
 
-  // Optimistic update: generate temp ID
-const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const handlePostComment = useCallback(async (text: string, parentCommentId?: string) => {
+    if (selectedReel) {
+      const reelId = selectedReel.id;
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-const handlePostComment = useCallback(async (text: string) => {
-  if (selectedReel) {
-    // Optimistic: create temp comment immediately
-    const optimisticComment: CommentType = {
-      id: tempId,
-      userId: currentUser?.id || '',
-      user: currentUser || {
-        id: '',
-        username: 'You',
-        displayName: 'You',
-        fullName: 'You',
-        avatar: '',
-        coverImage: '',
-        bio: '',
-        gender: '',
-        followers: 0,
-        following: 0,
-        posts: 0,
-        isVerified: false,
-        isFollowing: false,
-      },
-      text,
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      isLiked: false,
-      replies: [],
-    };
+      // Optimistic: create temp comment immediately
+      const optimisticComment: CommentType = {
+        id: tempId,
+        userId: currentUser?.id || '',
+        user: currentUser || {
+          id: '',
+          username: 'You',
+          displayName: 'You',
+          fullName: 'You',
+          avatar: '',
+          coverImage: '',
+          bio: '',
+          gender: '',
+          followers: 0,
+          following: 0,
+          posts: 0,
+          isVerified: false,
+          isFollowing: false,
+        },
+        text,
+        createdAt: new Date().toISOString(),
+        likes: 0,
+        isLiked: false,
+        replies: [],
+        parentId: parentCommentId,
+      };
 
-    setReelComments((prev) => [optimisticComment, ...prev]);
+      setReelComments((prev) =>
+        addCommentToList(prev, optimisticComment, parentCommentId),
+      );
 
-    try {
-      const result = await addReelComment(selectedReel.id, text);
-      if (result && result.success && result.comment) {
-        // Replace temp comment with real one
-        setReelComments((prev) =>
-          prev.map((c) => (c.id === tempId ? result.comment! : c))
-        );
-      } else {
-        // Remove temp comment if failed
-        setReelComments((prev) => prev.filter((c) => c.id !== tempId));
+      try {
+        const result = await createReelComment(reelId, text, parentCommentId);
+        if (result && result.success && result.comment) {
+          // Replace temp comment with real one
+          setReelComments((prev) =>
+            replaceCommentInList(prev, tempId, result.comment!)
+          );
+          setDisplayReels((prev) =>
+            prev.map((reel) =>
+              reel.id === reelId
+                ? { ...reel, comments: reel.comments + 1 }
+                : reel
+            )
+          );
+          setSelectedReel((prev) =>
+            prev && prev.id === reelId
+              ? { ...prev, comments: prev.comments + 1 }
+              : prev
+          );
+        } else {
+          // Remove temp comment if failed
+          setReelComments((prev) => removeCommentFromList(prev, tempId));
+        }
+      } catch (error) {
+        console.error('[Reels] Failed to post comment:', error);
+        // Rollback: remove temp comment
+        setReelComments((prev) => removeCommentFromList(prev, tempId));
       }
-    } catch (error) {
-      console.error('[Reels] Failed to post comment:', error);
-      // Rollback: remove temp comment
-      setReelComments((prev) => prev.filter((c) => c.id !== tempId));
     }
-  }
-}, [selectedReel, currentUser]);
+  }, [selectedReel, currentUser]);
 
   const handleLikeComment = useCallback(async (commentId: string) => {
     const comment = reelComments.find((c) => c.id === commentId);
     if (!comment) return;
 
     // Optimistic: toggle immediately
-    const newLikedState = !comment.isLiked;
+    const wasLiked = !!comment.isLiked;
+    const newLikedState = !wasLiked;
     setReelComments((prev) =>
       prev.map((c) =>
         c.id === commentId
@@ -346,14 +431,14 @@ const handlePostComment = useCallback(async (text: string) => {
     );
 
     try {
-      await toggleReelCommentLike(commentId, comment.isLiked);
+      await setReelCommentLike(commentId, wasLiked);
     } catch (error) {
       console.error('[Reels] Failed to like comment:', error);
       // Rollback on error
       setReelComments((prev) =>
         prev.map((c) =>
           c.id === commentId
-            ? { ...c, isLiked: comment.isLiked, likes: comment.likes }
+            ? { ...c, isLiked: wasLiked, likes: comment.likes }
             : c
         )
       );
@@ -369,7 +454,7 @@ const handlePostComment = useCallback(async (text: string) => {
     setReelComments((prev) => prev.filter((c) => c.id !== commentId));
 
     try {
-      await deleteReelComment(commentId);
+      await removeReelComment(commentId);
     } catch (error) {
       console.error('[Reels] Failed to delete comment:', error);
       // Rollback: restore comment
@@ -425,10 +510,11 @@ const handlePostComment = useCallback(async (text: string) => {
         onShare={() => handleOpenShare(item)}
         onUserPress={() => handleUserPress(item.userId)}
         onFollow={() => handleFollow(item.userId)}
+        onTogglePaused={handleTogglePaused}
         isCurrentUser={item.userId === currentUser?.id}
       />
     ),
-    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow],
+    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow, handleTogglePaused],
   );
 
   // ── Render separator ─────────────────────────────────────────────────────────
@@ -457,7 +543,7 @@ const handlePostComment = useCallback(async (text: string) => {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark" backgroundColor="#000" />
+      <StatusBar barStyle="dark-content" backgroundColor="#000" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header - để trong suốt vì nền reels là đen */}
         <View style={styles.reelsHeader}>
@@ -527,7 +613,7 @@ const handlePostComment = useCallback(async (text: string) => {
         reelId={selectedReel?.id || ''}
         onPostComment={handlePostComment}
         onLikeComment={handleLikeComment}
-        onReply={(commentId) => console.log('Reply to:', commentId)}
+        onReply={() => {}}
         onDeleteComment={handleDeleteComment}
         isLoading={isLoadingComments}
         currentUser={currentUser}

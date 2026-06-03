@@ -33,6 +33,7 @@ interface AppContextType {
   register: (email: string, password: string, username: string) => Promise<boolean>;
   confirmPendingAuth: (user: User) => void;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   isAuthenticated: boolean;
 
   // Onboarding
@@ -462,10 +463,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Fetch posts của user hiện tại cho profile page
   const refreshMyPosts = useCallback(async () => {
-    console.log("[AppContext] refreshMyPosts: START");
     try {
       const data = await api.getMyPosts();
-      console.log("[AppContext] refreshMyPosts: SUCCESS, got", data.length, "posts");
       setMyPosts(data);
     } catch (error: any) {
       console.error("[AppContext] refreshMyPosts: ERROR", error?.response?.status, error?.message);
@@ -868,15 +867,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // ─── Messages ─────────────────────────────────────────────
   const refreshConversations = useCallback(async () => {
-    console.log("[AppContext] refreshConversations: fetching...");
     setIsLoadingConversations(true);
     setConversationError(null);
     try {
       const data = await api.getConversations();
-      console.log("[AppContext] refreshConversations: received", data.length, "conversations");
-      if (data.length > 0) {
-        console.log("[AppContext] refreshConversations: first conv id:", data[0].id, "members:", data[0].members.length);
-      }
       setConversations((prev) => {
         const previousIds = new Set(prev.map((c) => c.id));
         return data.map((conv) => ({
@@ -929,11 +923,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         if (newMsg.senderId === currentUser?.id && !newMsg.sender?.displayName) {
           newMsg.sender = currentUser;
         }
-        console.log("[AppContext] sendMessage: Adding message optimistically - ID:", newMsg.id);
         setMessages((prev) => {
           const isDuplicate = prev.some((m) => m.id === newMsg.id);
           if (isDuplicate) {
-            console.log("[AppContext] sendMessage: Message already exists, skipping");
             return prev;
           }
           return [...prev, newMsg];
@@ -1007,7 +999,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Updates local state immediately — does NOT call API (markMessagesRead handles that)
   const markConversationAsRead = useCallback(
   async (conversationId: string) => {
-    console.log("[AppContext] markConversationAsRead: marking conv as read:", conversationId);
     locallyReadConversationIdsRef.current.add(conversationId);
     setConversations((prev) =>
       prev.map((conv) =>
@@ -1029,11 +1020,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const startConversation = useCallback(
   async (userId: string) => {
-    console.log("[AppContext] startConversation: calling API with userId:", userId);
     let conv;
     try {
       conv = await api.createPrivateConversation(userId);
-      console.log("[AppContext] startConversation: API returned conv.id:", conv?.id);
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? "Failed to start conversation.";
       console.error("[AppContext] startConversation: API FAILED —", msg, err);
@@ -1044,7 +1033,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (exists) return prev;
       return [conv, ...prev];
     });
-    console.log("[AppContext] startConversation: done. conv.id =", conv.id);
     return conv;
   },
   [],
@@ -1312,7 +1300,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // ─── Sync conversationMembers to ref (without triggering listener re-run) ───
   useEffect(() => {
-    console.log("[AppContext] conversationMembers updated, syncing to ref");
     conversationMembersRef.current = conversationMembers;
   }, [conversationMembers]);
 
@@ -1331,19 +1318,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return;
     }
 
-    console.log(`[AppContext] Registering ReceiveMessage listener for conversation: ${activeConversation.id}`);
 
     // Handler to receive new messages from SignalR
     const messageHandler = (messageData: BE_MessageResponse) => {
       // Ensure this message belongs to the current conversation
       const messageConvId = messageData.conversationId ?? (messageData as any).ConversationId;
       if (messageConvId !== activeConversation.id) {
-        console.log(`[AppContext] ReceiveMessage: Ignoring message for wrong conversation. Expected: ${activeConversation.id}, got: ${messageConvId}`);
         return;
       }
-
-      const messageId = messageData.id ?? (messageData as any).Id;
-      console.log(`[AppContext] ReceiveMessage event for conv ${activeConversation.id}, messageId: ${messageId}`);
 
       // Transform backend message format to frontend Message type using ref (won't re-trigger effect)
       const newMessage = transformBEMessage(messageData, conversationMembersRef.current);
@@ -1353,10 +1335,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         // Avoid duplicates: check if message ID already exists
         const isDuplicate = prev.some((m) => m.id === newMessage.id);
         if (isDuplicate) {
-          console.log(`[AppContext] ReceiveMessage: Message already exists (ID: ${newMessage.id}), skipping duplicate`);
           return prev;
         }
-        console.log(`[AppContext] ReceiveMessage: Added new message (ID: ${newMessage.id}). Total: ${prev.length + 1}`);
         return [...prev, newMessage];
       });
     };
@@ -1366,7 +1346,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     // Cleanup: unregister listener when conversation changes
     return () => {
-      console.log(`[AppContext] Unregistering ReceiveMessage listener for conversation: ${activeConversation.id}`);
       connection.off("ReceiveMessage", messageHandler);
     };
   }, [activeConversation, onlineSignalRConnected]);

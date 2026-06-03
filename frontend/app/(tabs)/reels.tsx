@@ -538,7 +538,7 @@ const handlePostComment = useCallback(async (text: string) => {
         reelId={selectedReel?.id || ''}
         onPostComment={handlePostComment}
         onLikeComment={handleLikeComment}
-        onReply={(commentId) => console.log('Reply to:', commentId)}
+        onReply={() => {}}
         onDeleteComment={handleDeleteComment}
         isLoading={isLoadingComments}
         currentUser={currentUser}

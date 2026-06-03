@@ -141,12 +141,6 @@ export async function uploadMedia(
 }
 
 function transformBEPost(post: BE_PostResponse, author?: User): Post {
-  console.log(
-    "[transformBEPost] post.id:",
-    post.id,
-    "media:",
-    JSON.stringify(post.media),
-  );
   const allImages = post.media?.map((m) => m.url) ?? [];
   return {
     id: post.id,
@@ -292,23 +286,13 @@ export async function getPostComments(postId: string): Promise<CommentType[]> {
 
 export async function getMyPosts(): Promise<Post[]> {
   try {
-    const { data, status } = await apiClient.get<BE_PostResponse[]>(
+    const { data } = await apiClient.get<BE_PostResponse[]>(
       "/post/my-posts",
       {
         params: { skip: 0, take: 50 },
       },
     );
-    console.log(
-      "[getMyPosts] status:",
-      status,
-      "data length:",
-      data?.length,
-      "data:",
-      JSON.stringify(data),
-    );
-
     if (!data || data.length === 0) {
-      console.log("[getMyPosts] No posts returned from API");
       return [];
     }
 
@@ -328,7 +312,6 @@ export async function getMyPosts(): Promise<Post[]> {
         posts.push(transformBEPost(post, undefined));
       }
     }
-    console.log("[getMyPosts] Transformed posts:", posts.length, "posts");
     return posts;
   } catch (e: any) {
     console.error(

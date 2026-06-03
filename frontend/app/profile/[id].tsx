@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -12,7 +12,6 @@ import { Avatar, PostGrid } from '../../components';
 import { HighlightBar } from '../../components/highlight';
 import { AppColors, layoutPadding, borderRadius } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
-import { ScreenHeader } from '../../components/ScreenHeader';
 import { CompactHeader } from '../../components/StaticPremiumHeader';
 import { UserActionsSheet } from '../../components/profile/UserActionsSheet';
 import { blockUser, getBlockStatus, type BlockStatusDto } from '../../services/blockService';
@@ -29,9 +28,10 @@ export default function UserProfileScreen() {
   const [profileTab, setProfileTab] = useState<'posts' | 'reposts'>('posts');
   const [reposts, setReposts] = useState<Post[]>([]);
   const [isLoadingReposts, setIsLoadingReposts] = useState(false);
+  const [isStartingConversation, setIsStartingConversation] = useState(false);
 
   // App context
-  const { currentUser } = useApp();
+  const { currentUser, startConversation } = useApp();
 
   // Highlights state
   const [highlights, setHighlights] = useState<HighlightGroup[]>([]);
@@ -113,8 +113,24 @@ export default function UserProfileScreen() {
 
   const handleMessage = async () => {
     if (!user) return;
-    // Navigate to message tab - in a real app, create/open a conversation
-    router.push('/(tabs)/message' as any);
+    setIsStartingConversation(true);
+    try {
+      const conversation = await startConversation(user.id);
+      if (!conversation?.id) {
+        Alert.alert('Error', 'Could not open this conversation right now.');
+        return;
+      }
+      router.push(`/message/chat/${conversation.id}` as any);
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error
+          ? error.message
+          : 'Could not open this conversation right now.',
+      );
+    } finally {
+      setIsStartingConversation(false);
+    }
   };
 
   const handleBlockUser = async () => {
@@ -256,8 +272,16 @@ export default function UserProfileScreen() {
                     {user.isFollowing ? 'Following' : 'Follow'}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.messageButton} onPress={handleMessage}>
-                  <Text style={styles.messageButtonText}>Message</Text>
+                <TouchableOpacity
+                  style={[styles.messageButton, isStartingConversation && styles.messageButtonDisabled]}
+                  onPress={handleMessage}
+                  disabled={isStartingConversation}
+                >
+                  {isStartingConversation ? (
+                    <ActivityIndicator size="small" color={AppColors.text} />
+                  ) : (
+                    <Text style={styles.messageButtonText}>Message</Text>
+                  )}
                 </TouchableOpacity>
               </>
             )}
@@ -431,6 +455,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 34,
+  },
+  messageButtonDisabled: {
+    opacity: 0.7,
   },
   messageButtonText: {
     fontWeight: '600',

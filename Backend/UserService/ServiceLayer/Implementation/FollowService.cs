@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using UserService.DTOs;
 using UserService.Messaging.Interface;
-using UserService.Messaging.Interface;
 using UserService.Models;
 using UserService.ServiceLayer.Interface;
 

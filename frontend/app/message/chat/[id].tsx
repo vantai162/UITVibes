@@ -29,6 +29,7 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -121,6 +122,9 @@ export default function ChatScreen() {
     | { type: 'leave' }
     | null
   >(null);
+
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Find the conversation from the global list by id
   const conversation = conversations.find((c) => c.id === id) ?? null;
@@ -361,23 +365,92 @@ export default function ChatScreen() {
     scheduleScrollToBottom(true);
   }, [scheduleScrollToBottom]);
 
+  // ── Image picker ────────────────────────────────────────────────────
+  const pickImage = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library to send images.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  }, []);
+
+  const removeSelectedImage = useCallback(() => {
+    setSelectedImage(null);
+  }, []);
+
   // ── Send ───────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !conversation || isSendingRef.current || isChatBlocked) return;
+    if (!conversation || isSendingRef.current || isChatBlocked) return;
+
+    const hasText = messageText.trim().length > 0;
+    const hasImage = !!selectedImage;
+
+    if (!hasText && !hasImage) return;
+
     isSendingRef.current = true;
+    pendingOwnMessageScrollRef.current = true;
+
+    if (hasImage && !hasText) {
+      setIsUploadingImage(true);
+    }
+
     const text = messageText.trim();
     setMessageText('');
-    pendingOwnMessageScrollRef.current = true;
+    if (hasImage) {
+      setSelectedImage(null);
+    }
+
     try {
-      await sendMessage(conversation.id, text);
+      if (hasImage) {
+        await sendMessage(conversation.id, {
+          content: text,
+          mediaUri: selectedImage,
+        });
+      } else {
+        await sendMessage(conversation.id, text);
+      }
     } catch (err: any) {
       pendingOwnMessageScrollRef.current = false;
-      setMessageText(text);
+      if (hasImage) {
+        setSelectedImage(selectedImage);
+      }
+      if (!hasImage) {
+        setMessageText(text);
+      }
       Alert.alert('Error', err?.message ?? 'Failed to send message.');
     } finally {
       isSendingRef.current = false;
+      setIsUploadingImage(false);
     }
-  }, [messageText, conversation, sendMessage, isChatBlocked]);
+  }, [messageText, selectedImage, conversation, sendMessage, isChatBlocked]);
+
+  const handleSendDirect = useCallback(
+    async (text: string) => {
+      if (!conversation || isSendingRef.current || isChatBlocked) return;
+      isSendingRef.current = true;
+      pendingOwnMessageScrollRef.current = true;
+      try {
+        await sendMessage(conversation.id, text);
+      } catch (err: any) {
+        pendingOwnMessageScrollRef.current = false;
+        Alert.alert('Error', err?.message ?? 'Failed to send message.');
+      } finally {
+        isSendingRef.current = false;
+      }
+    },
+    [conversation, sendMessage, isChatBlocked],
+  );
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -459,23 +532,6 @@ export default function ChatScreen() {
       setIsLeavingGroup(false);
     }
   }, [conversation, refreshConversations, router]);
-
-  const handleSendDirect = useCallback(
-    async (text: string) => {
-      if (!conversation || isSendingRef.current || isChatBlocked) return;
-      isSendingRef.current = true;
-      pendingOwnMessageScrollRef.current = true;
-      try {
-        await sendMessage(conversation.id, text);
-      } catch (err: any) {
-        pendingOwnMessageScrollRef.current = false;
-        Alert.alert('Error', err?.message ?? 'Failed to send message.');
-      } finally {
-        isSendingRef.current = false;
-      }
-    },
-    [conversation, sendMessage, isChatBlocked],
-  );
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   const isCurrentUser = (senderId: string) => senderId === currentUser?.id;
@@ -629,16 +685,23 @@ export default function ChatScreen() {
                 bubbleGroupStyle,
               ]}
             >
-              {item.text ? (
+              {item.messageType === 'image' || item.image ? (
+                <>
+                  <Image
+                    source={{ uri: item.image ?? '' }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                  {item.text ? (
+                    <Text style={[styles.messageText, mine && styles.messageTextMine]}>
+                      {item.text}
+                    </Text>
+                  ) : null}
+                </>
+              ) : item.text ? (
                 <Text style={[styles.messageText, mine && styles.messageTextMine]}>
                   {item.text}
                 </Text>
-              ) : item.image ? (
-                <Image
-                  source={{ uri: item.image }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
               ) : null}
             </View>
             {showMessageTime && (
@@ -840,12 +903,41 @@ export default function ChatScreen() {
             keyboardVerticalOffset={0}
             style={styles.keyboardAvoid}
           >
+            {/* Image preview strip */}
+            {selectedImage && (
+              <View style={styles.imagePreviewStrip}>
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={styles.imagePreviewRemove}
+                    onPress={removeSelectedImage}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name="x-circle" size={22} color="#fff" strokeWidth={2} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             <View
               style={[
                 styles.inputContainer,
                 { paddingBottom: Math.max(insets.bottom, 10) },
               ]}
             >
+              {/* Attach image button */}
+              <TouchableOpacity
+                onPress={pickImage}
+                style={styles.attachBtn}
+                disabled={isUploadingImage}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Feather
+                  name="image"
+                  size={22}
+                  color={isUploadingImage ? AppColors.iconMuted : AppColors.textMuted}
+                  strokeWidth={2}
+                />
+              </TouchableOpacity>
               <TextInput
                 style={styles.messageInput}
                 placeholder="Message..."
@@ -876,13 +968,17 @@ export default function ChatScreen() {
                 multiline
                 maxLength={4000}
               />
-              {messageText.length > 0 && (
+              {(messageText.length > 0 || !!selectedImage) && (
                 <TouchableOpacity
                   onPress={handleSend}
                   style={styles.sendBtn}
-                  disabled={isLoadingMessages}
+                  disabled={isLoadingMessages || isUploadingImage}
                 >
-                  <Feather name="send" size={22} color={AppColors.primary} strokeWidth={2} />
+                  {isUploadingImage ? (
+                    <ActivityIndicator size="small" color={AppColors.primary} />
+                  ) : (
+                    <Feather name="send" size={22} color={AppColors.primary} strokeWidth={2} />
+                  )}
                 </TouchableOpacity>
               )}
             </View>
@@ -1561,6 +1657,33 @@ const styles = StyleSheet.create({
     borderTopColor: AppColors.border,
     backgroundColor: AppColors.surfaceElevated,
     gap: 8,
+  },
+  attachBtn: {
+    padding: 4,
+  },
+  imagePreviewStrip: {
+    paddingHorizontal: layoutPadding,
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: AppColors.surfaceElevated,
+  },
+  imagePreviewContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imagePreviewThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePreviewRemove: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 11,
   },
   sendBtn: {
     padding: 4,

@@ -123,7 +123,18 @@ interface AppContextType {
   messageError: string | null;
   refreshConversations: () => Promise<void>;
   loadMessages: (conversationId: string) => Promise<Message[]>;
-  sendMessage: (conversationId: string, text: string) => Promise<void>;
+  sendMessage: (
+    conversationId: string,
+    payload: string | {
+      content?: string;
+      mediaUri?: string;
+      mediaUrl?: string;
+      mediaPublicId?: string;
+      fileName?: string;
+      fileSize?: number;
+      type?: 0 | 1 | 2 | 3;
+    },
+  ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, text: string) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   setActiveConversation: (conv: Conversation | null) => void;
@@ -876,11 +887,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   const sendMessageFn = useCallback(
-    async (conversationId: string, text: string) => {
+    async (
+      conversationId: string,
+      payload: string | {
+        content?: string;
+        mediaUri?: string;
+        mediaUrl?: string;
+        mediaPublicId?: string;
+        fileName?: string;
+        fileSize?: number;
+        type?: 0 | 1 | 2 | 3;
+      },
+    ) => {
       try {
         const newMsg = await api.sendMessage(
           conversationId,
-          text,
+          payload,
           conversationMembersRef.current,
         );
         if (newMsg.senderId === currentUser?.id && !newMsg.sender?.displayName) {
@@ -1221,6 +1243,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const messageConvId = messageData.conversationId ?? (messageData as any).ConversationId;
       const senderId = messageData.senderId ?? (messageData as any).SenderId;
       const content = messageData.content ?? (messageData as any).Content ?? "";
+      const mediaUrl = messageData.mediaUrl ?? (messageData as any).MediaUrl ?? null;
+      const rawType = messageData.type ?? (messageData as any).Type ?? "Text";
+      const normalizedType = (rawType as string).toLowerCase();
+      const messageType: Message["messageType"] =
+        normalizedType === "image" ? "image"
+        : normalizedType === "video" ? "video"
+        : normalizedType === "file" ? "file"
+        : normalizedType === "system" ? "system"
+        : "text";
       const createdAt = messageData.createdAt ?? (messageData as any).CreatedAt;
       if (!messageConvId) return;
 
@@ -1236,6 +1267,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           senderId,
           sender: { id: senderId } as User,
           text: content,
+          image: mediaUrl || undefined,
+          messageType,
           createdAt: createdAt ?? new Date().toISOString(),
           isRead: false,
         };

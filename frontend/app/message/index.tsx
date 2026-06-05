@@ -118,7 +118,11 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
               {isCurrentUser(item.lastMessage?.senderId ?? "")
                 ? "You: "
                 : ""}
-              {item.lastMessage?.text || "No messages yet"}
+              {(() => {
+                if (item.lastMessage?.image) return "📷 Photo";
+                if (item.lastMessage?.messageType === "image") return "📷 Photo";
+                return item.lastMessage?.text || "No messages yet";
+              })()}
             </Text>
             {hasUnread && (
               <View style={styles.unreadBadge}>

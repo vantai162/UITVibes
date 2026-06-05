@@ -27,6 +27,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { memo } from 'react';
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -171,6 +172,8 @@ export default function ReelsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
+  // Wrap renderItem bằng memo để tránh re-render không cần thiết
+  const MemoizedReelCard = memo(ReelCard);
 
   const {
     currentUser,
@@ -497,9 +500,10 @@ export default function ReelsScreen() {
   }, [refreshReels]);
 
   // ── Render reel card ────────────────────────────────────────────────────────
+  // Trong renderItem - dùng MemoizedReelCard thay ReelCard
   const renderItem = useCallback(
     ({ item, index }: { item: ReelDisplayData; index: number }) => (
-      <ReelCard
+      <MemoizedReelCard
         item={item}
         isActive={index === currentIndex}
         isPaused={isPaused}
@@ -514,7 +518,7 @@ export default function ReelsScreen() {
         isCurrentUser={item.userId === currentUser?.id}
       />
     ),
-    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow, handleTogglePaused],
+    [currentIndex, isPaused, ITEM_HEIGHT, OVERLAY_BOTTOM_PADDING, handleLike, handleOpenComments, handleOpenShare, handleUserPress, handleFollow, handleTogglePaused, currentUser?.id],
   );
 
   // ── Render separator ─────────────────────────────────────────────────────────
@@ -576,7 +580,10 @@ export default function ReelsScreen() {
           viewabilityConfig={viewabilityConfig}
           getItemLayout={getItemLayout}
           removeClippedSubviews
-          windowSize={3}
+          windowSize={2}
+          maxToRenderPerBatch={1}    
+          initialNumToRender={1}     
+          updateCellsBatchingPeriod={50}
           decelerationRate="fast"
           snapToInterval={ITEM_HEIGHT}
           snapToAlignment="start"

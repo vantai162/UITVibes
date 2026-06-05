@@ -16,7 +16,7 @@ function normalizeLevel(value: string | undefined): LogLevel {
   return __DEV__ ? 'warn' : 'silent';
 }
 
-const configuredLevel = normalizeLevel(process.env.EXPO_PUBLIC_LOG_LEVEL);
+const configuredLevel: LogLevel = 'silent';
 
 function canLog(level: Exclude<LogLevel, 'silent'>): boolean {
   return LEVEL_ORDER[configuredLevel] >= LEVEL_ORDER[level];
